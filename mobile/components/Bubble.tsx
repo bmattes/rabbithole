@@ -1,12 +1,5 @@
 import React, { useEffect, useRef } from 'react'
-import { Text, StyleSheet } from 'react-native'
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-  withSequence,
-  withTiming,
-} from 'react-native-reanimated'
+import { Text, StyleSheet, Animated } from 'react-native'
 
 export type BubbleState = 'idle' | 'active' | 'start' | 'end' | 'broken'
 
@@ -15,7 +8,7 @@ interface BubbleProps {
   state: BubbleState
   position: { x: number; y: number }
   index?: number
-  pulse?: boolean // triggers a scale pop when set to true
+  pulse?: boolean
 }
 
 export const BUBBLE_RADIUS = 44
@@ -29,35 +22,32 @@ const STATE_COLORS: Record<BubbleState, string> = {
 }
 
 export function Bubble({ label, state, position, index = 0, pulse }: BubbleProps) {
-  const translateY = useSharedValue(60)
-  const opacity = useSharedValue(0)
-  const scale = useSharedValue(1)
+  const translateY = useRef(new Animated.Value(60)).current
+  const opacity = useRef(new Animated.Value(0)).current
+  const scale = useRef(new Animated.Value(1)).current
   const prevPulse = useRef(false)
 
   // Entry animation
   useEffect(() => {
     const delay = index * 60
     setTimeout(() => {
-      translateY.value = withSpring(0, { damping: 14 })
-      opacity.value = withSpring(1)
+      Animated.parallel([
+        Animated.spring(translateY, { toValue: 0, damping: 14, useNativeDriver: true }),
+        Animated.spring(opacity, { toValue: 1, useNativeDriver: true }),
+      ]).start()
     }, delay)
   }, [])
 
   // Pulse on commit
   useEffect(() => {
     if (pulse && !prevPulse.current) {
-      scale.value = withSequence(
-        withTiming(1.25, { duration: 120 }),
-        withSpring(1, { damping: 8 })
-      )
+      Animated.sequence([
+        Animated.timing(scale, { toValue: 1.25, duration: 120, useNativeDriver: true }),
+        Animated.spring(scale, { toValue: 1, damping: 8, useNativeDriver: true }),
+      ]).start()
     }
     prevPulse.current = !!pulse
   }, [pulse])
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }, { scale: scale.value }],
-    opacity: opacity.value,
-  }))
 
   return (
     <Animated.View
@@ -69,7 +59,7 @@ export function Bubble({ label, state, position, index = 0, pulse }: BubbleProps
           left: position.x - BUBBLE_RADIUS,
           top: position.y - BUBBLE_RADIUS,
         },
-        animatedStyle,
+        { transform: [{ translateY }, { scale }], opacity },
       ]}
     >
       <Text style={styles.label} numberOfLines={2} adjustsFontSizeToFit>

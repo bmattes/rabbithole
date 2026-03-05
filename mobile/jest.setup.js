@@ -2,6 +2,7 @@ jest.mock('expo/src/winter/ImportMetaRegistry', () => ({
   ImportMetaRegistry: class {},
 }))
 
+
 jest.mock('expo-haptics', () => ({
   impactAsync: jest.fn(),
   notificationAsync: jest.fn(),

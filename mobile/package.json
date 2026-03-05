@@ -14,12 +14,16 @@
     "setupFiles": [
       "./jest.setup.js"
     ],
+    "setupFilesAfterFramework": [
+      "./jest.setup.after.js"
+    ],
     "moduleNameMapper": {
       "expo/src/winter$": "<rootDir>/__mocks__/expoWinter.js",
       "expo/src/winter/ImportMetaRegistry$": "<rootDir>/__mocks__/ImportMetaRegistry.js",
       "^react-native-reanimated$": "<rootDir>/__mocks__/react-native-reanimated.js",
       "^react-native-worklets-core$": "<rootDir>/__mocks__/react-native-worklets.js",
-      "^react-native/Libraries/BatchedBridge/NativeModules$": "<rootDir>/__mocks__/NativeModules.js"
+      "^react-native/Libraries/BatchedBridge/NativeModules$": "<rootDir>/__mocks__/NativeModules.js",
+      "^react-native/Libraries/Animated/Animated$": "<rootDir>/__mocks__/react-native-animated.js"
     },
     "transformIgnorePatterns": [
       "/node_modules/(?!(.pnpm|react-native|@react-native|@react-native-community|expo|@expo|@expo-google-fonts|react-navigation|@react-navigation|@sentry/react-native|native-base|react-native-worklets))"
