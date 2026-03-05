@@ -1,4 +1,7 @@
 insert into categories (name, wikidata_domain, active) values
-  ('Movies', 'film', true),
-  ('Music', 'music', true),
-  ('Sports', 'sport', true);
+  ('Movies',     'movies',     true),
+  ('Basketball', 'basketball', true),
+  ('Music',      'music',      true),
+  ('Science',    'science',    true),
+  ('History',    'history',    true)
+on conflict (name) do nothing;

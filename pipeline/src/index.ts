@@ -2,7 +2,7 @@ import * as dotenv from 'dotenv'
 dotenv.config()
 
 import { createClient } from '@supabase/supabase-js'
-import { fetchMovieEntities } from './wikidata'
+import { fetchEntities, CategoryDomain } from './wikidata'
 import { buildGraph } from './graphBuilder'
 import { composePuzzle } from './puzzleComposer'
 import { generateNarrative } from './narrativeGenerator'
@@ -13,31 +13,41 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY!
 )
 
-async function generatePuzzlesForCategory(categoryId: string, categoryName: string) {
-  console.log(`Generating puzzle for category: ${categoryName}`)
+async function generatePuzzleForCategory(
+  categoryId: string,
+  categoryName: string,
+  domain: CategoryDomain,
+  date: string
+) {
+  console.log(`\n[${categoryName}] Fetching entities from Wikidata...`)
+  const entities = await fetchEntities(domain, 400)
+  console.log(`[${categoryName}] Got ${entities.length} entities`)
 
-  const entities = await fetchMovieEntities(300)
   const graph = buildGraph(entities)
-  const entityIds = entities.map(e => e.id)
+  const entityIds = entities
+    .filter(e => e.relatedIds.length >= 2) // only well-connected nodes as start/end
+    .map(e => e.id)
 
   let puzzle = null
   let attempts = 0
-  while (!puzzle && attempts < 50) {
+  while (!puzzle && attempts < 100) {
     attempts++
     const startId = entityIds[Math.floor(Math.random() * entityIds.length)]
     const endId = entityIds[Math.floor(Math.random() * entityIds.length)]
     if (startId === endId) continue
-    puzzle = composePuzzle({ entities, graph, startId, endId })
+    puzzle = composePuzzle({ entities, graph, startId, endId, targetBubbleCount: 16 })
   }
 
   if (!puzzle) {
-    console.error(`Failed to compose puzzle after ${attempts} attempts`)
-    return
+    console.error(`[${categoryName}] Failed to compose puzzle after ${attempts} attempts`)
+    return null
   }
 
   const entityMap = new Map(entities.map(e => [e.id, e]))
   const pathLabels = puzzle.optimalPath.map(id => entityMap.get(id)?.label ?? id)
+  console.log(`[${categoryName}] Path: ${pathLabels.join(' → ')}`)
 
+  console.log(`[${categoryName}] Generating narrative...`)
   const narrative = await generateNarrative({
     startLabel: entityMap.get(puzzle.startId)?.label ?? puzzle.startId,
     endLabel: entityMap.get(puzzle.endId)?.label ?? puzzle.endId,
@@ -45,11 +55,7 @@ async function generatePuzzlesForCategory(categoryId: string, categoryName: stri
     category: categoryName,
   })
 
-  const tomorrow = new Date()
-  tomorrow.setDate(tomorrow.getDate() + 1)
-  const date = tomorrow.toISOString().split('T')[0]
-
-  const { error } = await supabase.from('puzzles').insert({
+  const { data, error } = await supabase.from('puzzles').upsert({
     category_id: categoryId,
     date,
     start_concept: entityMap.get(puzzle.startId)?.label ?? puzzle.startId,
@@ -58,27 +64,48 @@ async function generatePuzzlesForCategory(categoryId: string, categoryName: stri
     connections: puzzle.connections,
     optimal_path: puzzle.optimalPath,
     narrative,
-    status: 'pending_review',
-  })
+    status: 'published',
+  }, { onConflict: 'category_id,date' }).select('id').single()
 
-  if (error) console.error('Failed to insert puzzle:', error)
-  else console.log(`Puzzle generated for ${date}: ${pathLabels.join(' → ')}`)
+  if (error) {
+    console.error(`[${categoryName}] DB error:`, error.message)
+    return null
+  }
+
+  console.log(`[${categoryName}] ✓ Published puzzle ${data.id} for ${date}`)
+  return data.id
 }
 
-async function runPipeline() {
-  const { data: categories } = await supabase
+async function runPipeline(targetDate?: string) {
+  const date = targetDate ?? new Date().toISOString().split('T')[0]
+  console.log(`\n=== RabbitHole Pipeline — ${date} ===`)
+
+  const { data: categories, error } = await supabase
     .from('categories')
-    .select('id, name')
+    .select('id, name, wikidata_domain')
     .eq('active', true)
 
-  if (!categories) return
+  if (error || !categories?.length) {
+    console.error('No active categories found:', error?.message)
+    return
+  }
+
+  console.log(`Found ${categories.length} active categories`)
 
   for (const cat of categories) {
-    await generatePuzzlesForCategory(cat.id, cat.name)
+    try {
+      await generatePuzzleForCategory(cat.id, cat.name, cat.wikidata_domain as CategoryDomain, date)
+    } catch (err) {
+      console.error(`[${cat.name}] Error:`, err)
+    }
   }
+
+  console.log('\n=== Pipeline complete ===')
 }
 
-runPipeline()
-cron.schedule('0 2 * * *', runPipeline)
+// CLI: node -r ts-node/register src/index.ts [--date YYYY-MM-DD]
+const dateArg = process.argv.find(a => a.match(/^\d{4}-\d{2}-\d{2}$/))
+runPipeline(dateArg)
 
-console.log('RabbitHole pipeline running. Cron: nightly at 2am.')
+// Also schedule nightly at 2am
+cron.schedule('0 2 * * *', () => runPipeline())
