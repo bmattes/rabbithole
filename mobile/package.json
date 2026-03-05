@@ -14,7 +14,7 @@
     "setupFiles": [
       "./jest.setup.js"
     ],
-    "setupFilesAfterFramework": [
+    "setupFilesAfterEnv": [
       "./jest.setup.after.js"
     ],
     "moduleNameMapper": {

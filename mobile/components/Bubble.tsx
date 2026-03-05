@@ -30,12 +30,13 @@ export function Bubble({ label, state, position, index = 0, pulse }: BubbleProps
   // Entry animation
   useEffect(() => {
     const delay = index * 60
-    setTimeout(() => {
-      Animated.parallel([
+    const t = setTimeout(() => {
+      Animated.parallel?.([
         Animated.spring(translateY, { toValue: 0, damping: 14, useNativeDriver: true }),
         Animated.spring(opacity, { toValue: 1, useNativeDriver: true }),
-      ]).start()
+      ])?.start()
     }, delay)
+    return () => clearTimeout(t)
   }, [])
 
   // Pulse on commit
@@ -62,7 +63,7 @@ export function Bubble({ label, state, position, index = 0, pulse }: BubbleProps
         { transform: [{ translateY }, { scale }], opacity },
       ]}
     >
-      <Text style={styles.label} numberOfLines={2} adjustsFontSizeToFit>
+      <Text style={styles.label} numberOfLines={3} adjustsFontSizeToFit minimumFontScale={0.6}>
         {label}
       </Text>
     </Animated.View>
@@ -82,9 +83,10 @@ const styles = StyleSheet.create({
   },
   label: {
     color: '#fff',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
     textAlign: 'center',
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
+    lineHeight: 15,
   },
 })

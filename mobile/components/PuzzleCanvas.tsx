@@ -50,12 +50,21 @@ export function PuzzleCanvas({
 
   const dwellBubbleRef = useRef<string | null>(null)
   const dwellTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const canvasOffsetRef = useRef({ x: 0, y: 0 })
+  // Canvas origin in screen coordinates, set on layout
+  const canvasOriginRef = useRef({ x: 0, y: 0 })
+  const canvasViewRef = useRef<View>(null)
 
   const getBubble = useCallback(
     (id: string) => bubbles.find((b) => b.id === id),
     [bubbles]
   )
+
+  function toCanvas(pageX: number, pageY: number) {
+    return {
+      x: pageX - canvasOriginRef.current.x,
+      y: pageY - canvasOriginRef.current.y,
+    }
+  }
 
   function updatePath(newPath: string[]) {
     activePathRef.current = newPath
@@ -95,9 +104,12 @@ export function PuzzleCanvas({
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponderCapture: () => true,
       onMoveShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponderCapture: () => true,
       onPanResponderGrant: (evt) => {
-        const { locationX: x, locationY: y } = evt.nativeEvent
+        const { pageX, pageY } = evt.nativeEvent
+        const { x, y } = toCanvas(pageX, pageY)
         const currentPath = activePathRef.current
 
         if (currentPath.length > 0) {
@@ -122,7 +134,8 @@ export function PuzzleCanvas({
       },
       onPanResponderMove: (evt) => {
         if (!isTracingRef.current) return
-        const { locationX: x, locationY: y } = evt.nativeEvent
+        const { pageX, pageY } = evt.nativeEvent
+        const { x, y } = toCanvas(pageX, pageY)
         setFingerPos({ x, y })
 
         const currentPath = activePathRef.current
@@ -185,7 +198,16 @@ export function PuzzleCanvas({
   const lastBubble = activePath.length > 0 ? getBubble(activePath[activePath.length - 1]) : null
 
   return (
-    <View style={styles.canvas} {...panResponder.panHandlers}>
+    <View
+      ref={canvasViewRef}
+      style={styles.canvas}
+      onLayout={() => {
+        canvasViewRef.current?.measure((_x, _y, _w, _h, pageX, pageY) => {
+          canvasOriginRef.current = { x: pageX, y: pageY }
+        })
+      }}
+      {...panResponder.panHandlers}
+    >
       {activePath.slice(0, -1).map((id, i) => {
         const from = getBubble(id)
         const to = getBubble(activePath[i + 1])
