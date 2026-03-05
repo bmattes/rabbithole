@@ -17,6 +17,7 @@ interface PuzzleCanvasProps {
   startId: string
   endId: string
   onPathComplete: (path: string[]) => void
+  onPathChange?: (path: string[]) => void
 }
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
@@ -33,27 +34,35 @@ export function PuzzleCanvas({
   startId,
   endId,
   onPathComplete,
+  onPathChange,
 }: PuzzleCanvasProps) {
   const [activePath, setActivePath] = useState<string[]>([])
   const [fingerPos, setFingerPos] = useState<{ x: number; y: number } | null>(null)
   const activePathRef = useRef<string[]>([])
   const isTracingRef = useRef(false)
   const onPathCompleteRef = useRef(onPathComplete)
+  const onPathChangeRef = useRef(onPathChange)
   onPathCompleteRef.current = onPathComplete
+  onPathChangeRef.current = onPathChange
 
   const getBubble = useCallback(
     (id: string) => bubbles.find((b) => b.id === id),
     [bubbles]
   )
 
+  function updatePath(newPath: string[]) {
+    activePathRef.current = newPath
+    setActivePath(newPath)
+    onPathChangeRef.current?.(newPath)
+  }
+
   const pan = Gesture.Pan()
     .runOnJS(true)
     .onBegin(({ x, y }) => {
       const start = getBubble(startId)
       if (!start || !hitTest({ x, y }, start)) return
-      activePathRef.current = [startId]
       isTracingRef.current = true
-      setActivePath([startId])
+      updatePath([startId])
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
     })
     .onUpdate(({ x, y }) => {
@@ -69,19 +78,13 @@ export function PuzzleCanvas({
 
         const existingIndex = currentPath.indexOf(bubble.id)
         if (existingIndex !== -1) {
-          const newPath = currentPath.slice(0, existingIndex + 1)
-          activePathRef.current = newPath
-          setActivePath([...newPath])
+          updatePath(currentPath.slice(0, existingIndex + 1))
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
           return
         }
 
-        const newPath = [...currentPath, bubble.id]
-        activePathRef.current = newPath
-        setActivePath(newPath)
-
+        updatePath([...currentPath, bubble.id])
         if (bubble.id === endId) {
-          // Haptic preview that end is reached — completion fires on finger lift
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
         } else {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
@@ -92,17 +95,12 @@ export function PuzzleCanvas({
     .onEnd(() => {
       setFingerPos(null)
       const path = activePathRef.current
-      const lastId = path[path.length - 1]
-
-      if (lastId === endId) {
-        // Finger lifted while on end bubble — complete!
+      if (path[path.length - 1] === endId) {
         isTracingRef.current = false
         onPathCompleteRef.current(path)
       } else {
-        // Lifted elsewhere — reset
         isTracingRef.current = false
-        activePathRef.current = []
-        setActivePath([])
+        updatePath([])
       }
     })
 
