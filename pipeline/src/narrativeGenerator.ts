@@ -1,6 +1,6 @@
-import Anthropic from '@anthropic-ai/sdk'
+import OpenAI from 'openai'
 
-const client = new Anthropic()
+const client = new OpenAI()
 
 export async function generateNarrative({
   startLabel,
@@ -15,8 +15,8 @@ export async function generateNarrative({
 }): Promise<string> {
   const pathString = pathLabels.join(' → ')
 
-  const message = await client.messages.create({
-    model: 'claude-haiku-4-5-20251001',
+  const response = await client.chat.completions.create({
+    model: 'gpt-4o-mini',
     max_tokens: 150,
     messages: [
       {
@@ -30,7 +30,5 @@ The narrative should be engaging and explain WHY each connection makes sense, li
     ],
   })
 
-  const content = message.content[0]
-  if (content.type !== 'text') return ''
-  return content.text
+  return response.choices[0]?.message?.content ?? ''
 }

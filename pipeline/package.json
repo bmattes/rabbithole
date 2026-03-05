@@ -16,6 +16,7 @@
     "@supabase/supabase-js": "^2.98.0",
     "dotenv": "^17.3.1",
     "node-cron": "^4.2.1",
+    "openai": "^6.26.0",
     "typescript": "^5.9.3"
   },
   "devDependencies": {
