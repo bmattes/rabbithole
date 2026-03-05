@@ -3,6 +3,7 @@ import { View, StyleSheet, Dimensions, PanResponder } from 'react-native'
 import * as Haptics from 'expo-haptics'
 import { Bubble, BUBBLE_RADIUS, BubbleState } from './Bubble'
 import { ConnectionLine } from './ConnectionLine'
+import { RippleEffect } from './RippleEffect'
 
 export interface BubbleData {
   id: string
@@ -40,6 +41,7 @@ export function PuzzleCanvas({
   const [fingerPos, setFingerPos] = useState<{ x: number; y: number } | null>(null)
   const [hoveringId, setHoveringId] = useState<string | null>(null)
   const [lastConnectedId, setLastConnectedId] = useState<string | null>(null)
+  const [rippleCenter, setRippleCenter] = useState<{ x: number; y: number } | null>(null)
 
   const activePathRef = useRef<string[]>([])
   const isTracingRef = useRef(false)
@@ -176,6 +178,8 @@ export function PuzzleCanvas({
 
         const path = activePathRef.current
         if (path[path.length - 1] === endId) {
+          const endBubble = bubbles.find(b => b.id === endId)
+          if (endBubble) setRippleCenter(endBubble.position)
           onPathCompleteRef.current(path)
         }
       },
@@ -243,6 +247,13 @@ export function PuzzleCanvas({
           pulse={bubble.id === lastConnectedId}
         />
       ))}
+
+      {rippleCenter && (
+        <RippleEffect
+          center={rippleCenter}
+          onComplete={() => setRippleCenter(null)}
+        />
+      )}
     </View>
   )
 }

@@ -1,5 +1,7 @@
-import { View, Text, Pressable, StyleSheet } from 'react-native'
+import { useEffect } from 'react'
+import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native'
 import { router } from 'expo-router'
+import { useAuth } from '../../hooks/useAuth'
 
 const CATEGORIES = [
   { id: 'movies', label: 'Movies', emoji: '🎬' },
@@ -7,6 +9,22 @@ const CATEGORIES = [
 ]
 
 export default function TodayScreen() {
+  const { session, loading, signInAnonymously } = useAuth()
+
+  useEffect(() => {
+    if (!loading && !session) {
+      signInAnonymously()
+    }
+  }, [loading, session])
+
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator color="#7c3aed" />
+      </View>
+    )
+  }
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>RabbitHole</Text>
@@ -29,6 +47,7 @@ export default function TodayScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0a0a0a', paddingTop: 80, paddingHorizontal: 24 },
+  center: { flex: 1, backgroundColor: '#0a0a0a', alignItems: 'center', justifyContent: 'center' },
   title: { color: '#7c3aed', fontSize: 36, fontWeight: '800', marginBottom: 4 },
   subtitle: { color: '#888', fontSize: 16, marginBottom: 40 },
   card: {
