@@ -1,6 +1,6 @@
 import React, { useCallback, useRef, useState } from 'react'
 import { View, StyleSheet, Dimensions } from 'react-native'
-import { Gesture, GestureDetector } from 'react-native-gesture-handler'
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import * as Haptics from 'expo-haptics'
 import { Bubble, BUBBLE_RADIUS, BubbleState } from './Bubble'
 import { ConnectionLine } from './ConnectionLine'
@@ -176,6 +176,7 @@ export function PuzzleCanvas({
   const lastBubble = activePath.length > 0 ? getBubble(activePath[activePath.length - 1]) : null
 
   return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
     <GestureDetector gesture={pan}>
       <View style={styles.canvas}>
         {activePath.slice(0, -1).map((id, i) => {
@@ -215,6 +216,7 @@ export function PuzzleCanvas({
         ))}
       </View>
     </GestureDetector>
+    </GestureHandlerRootView>
   )
 }
 
