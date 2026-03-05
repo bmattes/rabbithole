@@ -1,6 +1,5 @@
 import React, { useCallback, useRef, useState } from 'react'
-import { View, StyleSheet, Dimensions } from 'react-native'
-import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
+import { View, StyleSheet, Dimensions, PanResponder } from 'react-native'
 import * as Haptics from 'expo-haptics'
 import { Bubble, BUBBLE_RADIUS, BubbleState } from './Bubble'
 import { ConnectionLine } from './ConnectionLine'
@@ -51,6 +50,7 @@ export function PuzzleCanvas({
 
   const dwellBubbleRef = useRef<string | null>(null)
   const dwellTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const canvasOffsetRef = useRef({ x: 0, y: 0 })
 
   const getBubble = useCallback(
     (id: string) => bubbles.find((b) => b.id === id),
@@ -86,84 +86,93 @@ export function PuzzleCanvas({
       if (bubble.id === endId) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
       } else {
-        // Firm "thunk" on commit
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy)
       }
     }
     setHoveringId(null)
   }
 
-  const pan = Gesture.Pan()
-    .runOnJS(true)
-    .onBegin(({ x, y }) => {
-      const currentPath = activePathRef.current
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (evt) => {
+        const { locationX: x, locationY: y } = evt.nativeEvent
+        const currentPath = activePathRef.current
 
-      if (currentPath.length > 0) {
-        const checkpoint = getBubble(currentPath[currentPath.length - 1])
-        if (checkpoint && hitTest({ x, y }, checkpoint)) {
-          isTracingRef.current = true
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
-        } else {
-          updatePath([])
-          setLastConnectedId(null)
-          isTracingRef.current = false
+        if (currentPath.length > 0) {
+          const checkpoint = getBubble(currentPath[currentPath.length - 1])
+          if (checkpoint && hitTest({ x, y }, checkpoint)) {
+            isTracingRef.current = true
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+          } else {
+            updatePath([])
+            setLastConnectedId(null)
+            isTracingRef.current = false
+          }
+          return
         }
-        return
-      }
 
-      const start = getBubble(startId)
-      if (!start || !hitTest({ x, y }, start)) return
-      isTracingRef.current = true
-      updatePath([startId])
-      setLastConnectedId(startId)
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
-    })
-    .onUpdate(({ x, y }) => {
-      if (!isTracingRef.current) return
-      setFingerPos({ x, y })
+        const start = getBubble(startId)
+        if (!start || !hitTest({ x, y }, start)) return
+        isTracingRef.current = true
+        updatePath([startId])
+        setLastConnectedId(startId)
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+      },
+      onPanResponderMove: (evt) => {
+        if (!isTracingRef.current) return
+        const { locationX: x, locationY: y } = evt.nativeEvent
+        setFingerPos({ x, y })
 
-      const currentPath = activePathRef.current
-      const lastId = currentPath[currentPath.length - 1]
+        const currentPath = activePathRef.current
+        const lastId = currentPath[currentPath.length - 1]
 
-      let overBubble: BubbleData | null = null
-      for (const bubble of bubbles) {
-        if (hitTest({ x, y }, bubble) && bubble.id !== lastId) {
-          overBubble = bubble
-          break
+        let overBubble: BubbleData | null = null
+        for (const bubble of bubbles) {
+          if (hitTest({ x, y }, bubble) && bubble.id !== lastId) {
+            overBubble = bubble
+            break
+          }
         }
-      }
 
-      if (!overBubble) {
+        if (!overBubble) {
+          clearDwell()
+          return
+        }
+
+        if (overBubble.id === dwellBubbleRef.current) return
+
         clearDwell()
-        return
-      }
+        dwellBubbleRef.current = overBubble.id
+        setHoveringId(overBubble.id)
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
 
-      if (overBubble.id === dwellBubbleRef.current) return
+        const capturedBubble = overBubble
+        dwellTimerRef.current = setTimeout(() => {
+          if (isTracingRef.current && dwellBubbleRef.current === capturedBubble.id) {
+            connectBubble(capturedBubble)
+            dwellBubbleRef.current = null
+          }
+        }, DWELL_MS)
+      },
+      onPanResponderRelease: () => {
+        clearDwell()
+        setFingerPos(null)
+        isTracingRef.current = false
 
-      // Entered new bubble — light haptic preview + start dwell timer
-      clearDwell()
-      dwellBubbleRef.current = overBubble.id
-      setHoveringId(overBubble.id)
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-
-      const capturedBubble = overBubble
-      dwellTimerRef.current = setTimeout(() => {
-        if (isTracingRef.current && dwellBubbleRef.current === capturedBubble.id) {
-          connectBubble(capturedBubble)
-          dwellBubbleRef.current = null
+        const path = activePathRef.current
+        if (path[path.length - 1] === endId) {
+          onPathCompleteRef.current(path)
         }
-      }, DWELL_MS)
+      },
+      onPanResponderTerminate: () => {
+        clearDwell()
+        setFingerPos(null)
+        isTracingRef.current = false
+      },
     })
-    .onEnd(() => {
-      clearDwell()
-      setFingerPos(null)
-      isTracingRef.current = false
-
-      const path = activePathRef.current
-      if (path[path.length - 1] === endId) {
-        onPathCompleteRef.current(path)
-      }
-    })
+  ).current
 
   function getBubbleState(id: string): BubbleState {
     if (id === startId) return 'start'
@@ -176,47 +185,43 @@ export function PuzzleCanvas({
   const lastBubble = activePath.length > 0 ? getBubble(activePath[activePath.length - 1]) : null
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-    <GestureDetector gesture={pan}>
-      <View style={styles.canvas}>
-        {activePath.slice(0, -1).map((id, i) => {
-          const from = getBubble(id)
-          const to = getBubble(activePath[i + 1])
-          if (!from || !to) return null
-          return (
-            <ConnectionLine
-              key={`${id}-${activePath[i + 1]}`}
-              from={from.position}
-              to={to.position}
-              active
-              width={SCREEN_WIDTH}
-              height={SCREEN_HEIGHT}
-            />
-          )
-        })}
-
-        {isTracingRef.current && lastBubble && fingerPos && (
+    <View style={styles.canvas} {...panResponder.panHandlers}>
+      {activePath.slice(0, -1).map((id, i) => {
+        const from = getBubble(id)
+        const to = getBubble(activePath[i + 1])
+        if (!from || !to) return null
+        return (
           <ConnectionLine
-            from={lastBubble.position}
-            to={fingerPos}
+            key={`${id}-${activePath[i + 1]}`}
+            from={from.position}
+            to={to.position}
+            active
             width={SCREEN_WIDTH}
             height={SCREEN_HEIGHT}
           />
-        )}
+        )
+      })}
 
-        {bubbles.map((bubble, i) => (
-          <Bubble
-            key={bubble.id}
-            label={bubble.label}
-            state={getBubbleState(bubble.id)}
-            position={bubble.position}
-            index={i}
-            pulse={bubble.id === lastConnectedId}
-          />
-        ))}
-      </View>
-    </GestureDetector>
-    </GestureHandlerRootView>
+      {isTracingRef.current && lastBubble && fingerPos && (
+        <ConnectionLine
+          from={lastBubble.position}
+          to={fingerPos}
+          width={SCREEN_WIDTH}
+          height={SCREEN_HEIGHT}
+        />
+      )}
+
+      {bubbles.map((bubble, i) => (
+        <Bubble
+          key={bubble.id}
+          label={bubble.label}
+          state={getBubbleState(bubble.id)}
+          position={bubble.position}
+          index={i}
+          pulse={bubble.id === lastConnectedId}
+        />
+      ))}
+    </View>
   )
 }
 
