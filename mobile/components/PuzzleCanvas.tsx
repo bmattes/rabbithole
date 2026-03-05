@@ -36,8 +36,10 @@ export function PuzzleCanvas({
 }: PuzzleCanvasProps) {
   const [activePath, setActivePath] = useState<string[]>([])
   const [fingerPos, setFingerPos] = useState<{ x: number; y: number } | null>(null)
-  const [isTracing, setIsTracing] = useState(false)
   const activePathRef = useRef<string[]>([])
+  const isTracingRef = useRef(false)
+  const onPathCompleteRef = useRef(onPathComplete)
+  onPathCompleteRef.current = onPathComplete
 
   const getBubble = useCallback(
     (id: string) => bubbles.find((b) => b.id === id),
@@ -50,12 +52,12 @@ export function PuzzleCanvas({
       const start = getBubble(startId)
       if (!start || !hitTest({ x, y }, start)) return
       activePathRef.current = [startId]
+      isTracingRef.current = true
       setActivePath([startId])
-      setIsTracing(true)
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
     })
     .onUpdate(({ x, y }) => {
-      if (!isTracing) return
+      if (!isTracingRef.current) return
       setFingerPos({ x, y })
 
       const currentPath = activePathRef.current
@@ -67,6 +69,7 @@ export function PuzzleCanvas({
 
         const existingIndex = currentPath.indexOf(bubble.id)
         if (existingIndex !== -1) {
+          // Backtrack
           const newPath = currentPath.slice(0, existingIndex + 1)
           activePathRef.current = newPath
           setActivePath([...newPath])
@@ -74,16 +77,17 @@ export function PuzzleCanvas({
           return
         }
 
+        // New bubble
         const newPath = [...currentPath, bubble.id]
         activePathRef.current = newPath
         setActivePath(newPath)
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
 
         if (bubble.id === endId) {
+          isTracingRef.current = false
           setFingerPos(null)
-          setIsTracing(false)
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-          onPathComplete(newPath)
+          onPathCompleteRef.current(newPath)
         }
         return
       }
@@ -91,7 +95,7 @@ export function PuzzleCanvas({
     .onEnd(() => {
       setFingerPos(null)
       if (activePathRef.current[activePathRef.current.length - 1] !== endId) {
-        setIsTracing(false)
+        isTracingRef.current = false
         activePathRef.current = []
         setActivePath([])
       }
@@ -125,7 +129,7 @@ export function PuzzleCanvas({
           )
         })}
 
-        {isTracing && lastBubble && fingerPos && (
+        {isTracingRef.current && lastBubble && fingerPos && (
           <ConnectionLine
             from={lastBubble.position}
             to={fingerPos}
