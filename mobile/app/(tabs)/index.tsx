@@ -1,16 +1,28 @@
 import { View, Text, Pressable, StyleSheet } from 'react-native'
 import { router } from 'expo-router'
 
+const CATEGORIES = [
+  { id: 'movies', label: 'Movies', emoji: '🎬' },
+  { id: 'basketball', label: 'Basketball', emoji: '🏀' },
+]
+
 export default function TodayScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>RabbitHole</Text>
       <Text style={styles.subtitle}>Today's Puzzles</Text>
 
-      <Pressable style={styles.card} onPress={() => router.push('/puzzle/Movies')}>
-        <Text style={styles.cardTitle}>Movies</Text>
-        <Text style={styles.cardArrow}>→</Text>
-      </Pressable>
+      {CATEGORIES.map(cat => (
+        <Pressable
+          key={cat.id}
+          style={styles.card}
+          onPress={() => router.push(`/puzzle/${cat.id}`)}
+        >
+          <Text style={styles.cardEmoji}>{cat.emoji}</Text>
+          <Text style={styles.cardTitle}>{cat.label}</Text>
+          <Text style={styles.cardArrow}>→</Text>
+        </Pressable>
+      ))}
     </View>
   )
 }
@@ -25,10 +37,11 @@ const styles = StyleSheet.create({
     padding: 20,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: '#2a2a3e',
   },
-  cardTitle: { color: '#fff', fontSize: 18, fontWeight: '600' },
+  cardEmoji: { fontSize: 24, marginRight: 14 },
+  cardTitle: { flex: 1, color: '#fff', fontSize: 18, fontWeight: '600' },
   cardArrow: { color: '#7c3aed', fontSize: 20 },
 })
