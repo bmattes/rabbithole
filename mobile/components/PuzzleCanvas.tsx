@@ -24,7 +24,7 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
 function hitTest(point: { x: number; y: number }, bubble: BubbleData): boolean {
   const dx = point.x - bubble.position.x
   const dy = point.y - bubble.position.y
-  return Math.sqrt(dx * dx + dy * dy) <= BUBBLE_RADIUS * 1.2
+  return Math.sqrt(dx * dx + dy * dy) <= BUBBLE_RADIUS // exact radius, no padding
 }
 
 export function PuzzleCanvas({
@@ -69,7 +69,6 @@ export function PuzzleCanvas({
 
         const existingIndex = currentPath.indexOf(bubble.id)
         if (existingIndex !== -1) {
-          // Backtrack
           const newPath = currentPath.slice(0, existingIndex + 1)
           activePathRef.current = newPath
           setActivePath([...newPath])
@@ -77,7 +76,6 @@ export function PuzzleCanvas({
           return
         }
 
-        // New bubble
         const newPath = [...currentPath, bubble.id]
         activePathRef.current = newPath
         setActivePath(newPath)
@@ -153,8 +151,5 @@ export function PuzzleCanvas({
 }
 
 const styles = StyleSheet.create({
-  canvas: {
-    flex: 1,
-    backgroundColor: '#0a0a0a',
-  },
+  canvas: { flex: 1, backgroundColor: '#0a0a0a' },
 })

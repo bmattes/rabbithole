@@ -5,10 +5,8 @@ import { PuzzleCanvas } from '../../components/PuzzleCanvas'
 import { usePuzzle } from '../../hooks/usePuzzle'
 import { useTimer } from '../../hooks/useTimer'
 import { computeScore } from '../../lib/scoring'
-import { findBreakPoints } from '../../lib/pathValidation'
 import { submitRun } from '../../lib/api'
 
-// Mock data used when no Supabase puzzle is available
 const MOCK_PUZZLE = {
   id: 'mock-puzzle',
   category_id: 'mock',
@@ -22,7 +20,7 @@ const MOCK_PUZZLE = {
     { id: 'b2', label: 'Marlon Brando', position: { x: 290, y: 260 } },
     { id: 'b3', label: 'Al Pacino', position: { x: 80, y: 420 } },
     { id: 'b4', label: 'Vietnam War', position: { x: 290, y: 430 } },
-    { id: 'orphan', label: 'Citizen Kane', position: { x: 190, y: 355 } },
+    { id: 'orphan', label: 'Citizen Kane', position: { x: 330, y: 355 } },
     { id: 'end', label: 'Apocalypse Now', position: { x: 195, y: 570 } },
   ],
   connections: {
@@ -39,11 +37,10 @@ const MOCK_PUZZLE = {
 
 export default function PuzzleScreen() {
   const { id: categoryId } = useLocalSearchParams<{ id: string }>()
-  const { puzzle: livePuzzle, loading, error } = usePuzzle(categoryId)
-  const { elapsed, running, start, stop } = useTimer()
+  const { puzzle: livePuzzle, loading } = usePuzzle(categoryId)
+  const { elapsed, start, stop } = useTimer()
   const [started, setStarted] = useState(false)
 
-  // Use live puzzle if available, otherwise fall back to mock
   const puzzle = livePuzzle ?? (!loading ? MOCK_PUZZLE : null)
 
   useEffect(() => {
@@ -54,26 +51,15 @@ export default function PuzzleScreen() {
   }, [puzzle])
 
   if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator color="#7c3aed" size="large" />
-      </View>
-    )
+    return <View style={styles.center}><ActivityIndicator color="#7c3aed" size="large" /></View>
   }
 
   if (!puzzle) {
-    return (
-      <View style={styles.center}>
-        <Text style={styles.error}>{error ?? 'No puzzle available'}</Text>
-      </View>
-    )
+    return <View style={styles.center}><Text style={styles.error}>No puzzle available</Text></View>
   }
 
   function handlePathComplete(path: string[]) {
     const timeMs = stop()
-    const breaks = findBreakPoints(path, puzzle!.connections)
-    if (breaks.length > 0) return // invalid path, keep going
-
     const score = computeScore({
       optimalHops: puzzle!.optimal_path.length - 1,
       playerHops: path.length - 1,
@@ -81,13 +67,7 @@ export default function PuzzleScreen() {
     })
 
     if (puzzle!.id !== 'mock-puzzle') {
-      submitRun({
-        puzzleId: puzzle!.id,
-        userId: 'anon', // replaced with real auth in Task 18
-        path,
-        timeMs,
-        score,
-      })
+      submitRun({ puzzleId: puzzle!.id, userId: 'anon', path, timeMs, score })
     }
 
     router.replace(`/results/${puzzle!.id}?score=${score}&timeMs=${timeMs}`)
@@ -97,23 +77,18 @@ export default function PuzzleScreen() {
   const minutes = Math.floor(elapsed / 60000)
   const seconds = String(Math.floor((elapsed % 60000) / 1000)).padStart(2, '0')
 
-  const startId = puzzle.bubbles[0]?.id
-  const endId = puzzle.bubbles[puzzle.bubbles.length - 1]?.id
-
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>RabbitHole</Text>
         <Text style={[styles.timer, { color: timerColor }]}>{minutes}:{seconds}</Text>
       </View>
-      <Text style={styles.prompt}>
-        {puzzle.start_concept} → {puzzle.end_concept}
-      </Text>
+      <Text style={styles.prompt}>{puzzle.start_concept} → {puzzle.end_concept}</Text>
       <PuzzleCanvas
         bubbles={puzzle.bubbles}
         connections={puzzle.connections}
-        startId={startId}
-        endId={endId}
+        startId={puzzle.bubbles[0]?.id}
+        endId={puzzle.bubbles[puzzle.bubbles.length - 1]?.id}
         onPathComplete={handlePathComplete}
       />
     </View>
