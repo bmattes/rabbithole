@@ -59,6 +59,23 @@ export function PuzzleCanvas({
   const pan = Gesture.Pan()
     .runOnJS(true)
     .onBegin(({ x, y }) => {
+      const currentPath = activePathRef.current
+
+      // If we have a checkpoint, resume must start from that last bubble
+      if (currentPath.length > 0) {
+        const checkpoint = getBubble(currentPath[currentPath.length - 1])
+        if (checkpoint && hitTest({ x, y }, checkpoint)) {
+          isTracingRef.current = true
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+          return
+        }
+        // Pressed somewhere else — reset and require starting over from start
+        updatePath([])
+        isTracingRef.current = false
+        return
+      }
+
+      // No checkpoint yet — must start on the start bubble
       const start = getBubble(startId)
       if (!start || !hitTest({ x, y }, start)) return
       isTracingRef.current = true
@@ -78,11 +95,13 @@ export function PuzzleCanvas({
 
         const existingIndex = currentPath.indexOf(bubble.id)
         if (existingIndex !== -1) {
+          // Backtrack to earlier bubble
           updatePath(currentPath.slice(0, existingIndex + 1))
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
           return
         }
 
+        // New bubble
         updatePath([...currentPath, bubble.id])
         if (bubble.id === endId) {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
@@ -94,14 +113,14 @@ export function PuzzleCanvas({
     })
     .onEnd(() => {
       setFingerPos(null)
+      isTracingRef.current = false
+
       const path = activePathRef.current
       if (path[path.length - 1] === endId) {
-        isTracingRef.current = false
+        // Completed — navigate to results
         onPathCompleteRef.current(path)
-      } else {
-        isTracingRef.current = false
-        updatePath([])
       }
+      // Otherwise: keep path as-is so user can resume from checkpoint
     })
 
   function getBubbleState(id: string): BubbleState {
