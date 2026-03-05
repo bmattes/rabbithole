@@ -21,6 +21,7 @@ interface PuzzleCanvasProps {
 }
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
+const DWELL_MS = 300
 
 function hitTest(point: { x: number; y: number }, bubble: BubbleData): boolean {
   const dx = point.x - bubble.position.x
@@ -38,12 +39,18 @@ export function PuzzleCanvas({
 }: PuzzleCanvasProps) {
   const [activePath, setActivePath] = useState<string[]>([])
   const [fingerPos, setFingerPos] = useState<{ x: number; y: number } | null>(null)
+  const [hoveringId, setHoveringId] = useState<string | null>(null)
+  const [lastConnectedId, setLastConnectedId] = useState<string | null>(null)
+
   const activePathRef = useRef<string[]>([])
   const isTracingRef = useRef(false)
   const onPathCompleteRef = useRef(onPathComplete)
   const onPathChangeRef = useRef(onPathChange)
   onPathCompleteRef.current = onPathComplete
   onPathChangeRef.current = onPathChange
+
+  const dwellBubbleRef = useRef<string | null>(null)
+  const dwellTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const getBubble = useCallback(
     (id: string) => bubbles.find((b) => b.id === id),
@@ -56,30 +63,59 @@ export function PuzzleCanvas({
     onPathChangeRef.current?.(newPath)
   }
 
+  function clearDwell() {
+    if (dwellTimerRef.current) {
+      clearTimeout(dwellTimerRef.current)
+      dwellTimerRef.current = null
+    }
+    dwellBubbleRef.current = null
+    setHoveringId(null)
+  }
+
+  function connectBubble(bubble: BubbleData) {
+    const currentPath = activePathRef.current
+    const existingIndex = currentPath.indexOf(bubble.id)
+
+    if (existingIndex !== -1) {
+      updatePath(currentPath.slice(0, existingIndex + 1))
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+    } else {
+      const newPath = [...currentPath, bubble.id]
+      updatePath(newPath)
+      setLastConnectedId(bubble.id)
+      if (bubble.id === endId) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+      } else {
+        // Firm "thunk" on commit
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy)
+      }
+    }
+    setHoveringId(null)
+  }
+
   const pan = Gesture.Pan()
     .runOnJS(true)
     .onBegin(({ x, y }) => {
       const currentPath = activePathRef.current
 
-      // If we have a checkpoint, resume must start from that last bubble
       if (currentPath.length > 0) {
         const checkpoint = getBubble(currentPath[currentPath.length - 1])
         if (checkpoint && hitTest({ x, y }, checkpoint)) {
           isTracingRef.current = true
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
-          return
+        } else {
+          updatePath([])
+          setLastConnectedId(null)
+          isTracingRef.current = false
         }
-        // Pressed somewhere else — reset and require starting over from start
-        updatePath([])
-        isTracingRef.current = false
         return
       }
 
-      // No checkpoint yet — must start on the start bubble
       const start = getBubble(startId)
       if (!start || !hitTest({ x, y }, start)) return
       isTracingRef.current = true
       updatePath([startId])
+      setLastConnectedId(startId)
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
     })
     .onUpdate(({ x, y }) => {
@@ -89,44 +125,51 @@ export function PuzzleCanvas({
       const currentPath = activePathRef.current
       const lastId = currentPath[currentPath.length - 1]
 
+      let overBubble: BubbleData | null = null
       for (const bubble of bubbles) {
-        if (!hitTest({ x, y }, bubble)) continue
-        if (bubble.id === lastId) continue
-
-        const existingIndex = currentPath.indexOf(bubble.id)
-        if (existingIndex !== -1) {
-          // Backtrack to earlier bubble
-          updatePath(currentPath.slice(0, existingIndex + 1))
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-          return
+        if (hitTest({ x, y }, bubble) && bubble.id !== lastId) {
+          overBubble = bubble
+          break
         }
+      }
 
-        // New bubble
-        updatePath([...currentPath, bubble.id])
-        if (bubble.id === endId) {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-        } else {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-        }
+      if (!overBubble) {
+        clearDwell()
         return
       }
+
+      if (overBubble.id === dwellBubbleRef.current) return
+
+      // Entered new bubble — light haptic preview + start dwell timer
+      clearDwell()
+      dwellBubbleRef.current = overBubble.id
+      setHoveringId(overBubble.id)
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+
+      const capturedBubble = overBubble
+      dwellTimerRef.current = setTimeout(() => {
+        if (isTracingRef.current && dwellBubbleRef.current === capturedBubble.id) {
+          connectBubble(capturedBubble)
+          dwellBubbleRef.current = null
+        }
+      }, DWELL_MS)
     })
     .onEnd(() => {
+      clearDwell()
       setFingerPos(null)
       isTracingRef.current = false
 
       const path = activePathRef.current
       if (path[path.length - 1] === endId) {
-        // Completed — navigate to results
         onPathCompleteRef.current(path)
       }
-      // Otherwise: keep path as-is so user can resume from checkpoint
     })
 
   function getBubbleState(id: string): BubbleState {
     if (id === startId) return 'start'
     if (id === endId) return 'end'
     if (activePath.includes(id)) return 'active'
+    if (id === hoveringId) return 'active'
     return 'idle'
   }
 
@@ -167,6 +210,7 @@ export function PuzzleCanvas({
             state={getBubbleState(bubble.id)}
             position={bubble.position}
             index={i}
+            pulse={bubble.id === lastConnectedId}
           />
         ))}
       </View>

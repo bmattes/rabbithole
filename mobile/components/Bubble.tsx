@@ -1,9 +1,11 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useRef } from 'react'
 import { Text, StyleSheet } from 'react-native'
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withSpring,
+  withSequence,
+  withTiming,
 } from 'react-native-reanimated'
 
 export type BubbleState = 'idle' | 'active' | 'start' | 'end' | 'broken'
@@ -13,6 +15,7 @@ interface BubbleProps {
   state: BubbleState
   position: { x: number; y: number }
   index?: number
+  pulse?: boolean // triggers a scale pop when set to true
 }
 
 export const BUBBLE_RADIUS = 44
@@ -25,10 +28,13 @@ const STATE_COLORS: Record<BubbleState, string> = {
   broken: '#ef4444',
 }
 
-export function Bubble({ label, state, position, index = 0 }: BubbleProps) {
+export function Bubble({ label, state, position, index = 0, pulse }: BubbleProps) {
   const translateY = useSharedValue(60)
   const opacity = useSharedValue(0)
+  const scale = useSharedValue(1)
+  const prevPulse = useRef(false)
 
+  // Entry animation
   useEffect(() => {
     const delay = index * 60
     setTimeout(() => {
@@ -37,8 +43,19 @@ export function Bubble({ label, state, position, index = 0 }: BubbleProps) {
     }, delay)
   }, [])
 
+  // Pulse on commit
+  useEffect(() => {
+    if (pulse && !prevPulse.current) {
+      scale.value = withSequence(
+        withTiming(1.25, { duration: 120 }),
+        withSpring(1, { damping: 8 })
+      )
+    }
+    prevPulse.current = !!pulse
+  }, [pulse])
+
   const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }],
+    transform: [{ translateY: translateY.value }, { scale: scale.value }],
     opacity: opacity.value,
   }))
 
