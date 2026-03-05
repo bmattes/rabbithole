@@ -24,7 +24,7 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
 function hitTest(point: { x: number; y: number }, bubble: BubbleData): boolean {
   const dx = point.x - bubble.position.x
   const dy = point.y - bubble.position.y
-  return Math.sqrt(dx * dx + dy * dy) <= BUBBLE_RADIUS // exact radius, no padding
+  return Math.sqrt(dx * dx + dy * dy) <= BUBBLE_RADIUS
 }
 
 export function PuzzleCanvas({
@@ -79,20 +79,27 @@ export function PuzzleCanvas({
         const newPath = [...currentPath, bubble.id]
         activePathRef.current = newPath
         setActivePath(newPath)
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
 
         if (bubble.id === endId) {
-          isTracingRef.current = false
-          setFingerPos(null)
+          // Haptic preview that end is reached — completion fires on finger lift
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-          onPathCompleteRef.current(newPath)
+        } else {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
         }
         return
       }
     })
     .onEnd(() => {
       setFingerPos(null)
-      if (activePathRef.current[activePathRef.current.length - 1] !== endId) {
+      const path = activePathRef.current
+      const lastId = path[path.length - 1]
+
+      if (lastId === endId) {
+        // Finger lifted while on end bubble — complete!
+        isTracingRef.current = false
+        onPathCompleteRef.current(path)
+      } else {
+        // Lifted elsewhere — reset
         isTracingRef.current = false
         activePathRef.current = []
         setActivePath([])
