@@ -7,6 +7,11 @@ export function useAuth() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    if (!process.env.EXPO_PUBLIC_SUPABASE_URL) {
+      setLoading(false)
+      return
+    }
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
       setLoading(false)
@@ -20,6 +25,8 @@ export function useAuth() {
   }, [])
 
   async function signInAnonymously() {
+    // No-op until Supabase project is configured
+    if (!process.env.EXPO_PUBLIC_SUPABASE_URL) return
     const { data, error } = await supabase.auth.signInAnonymously()
     if (!error && data.user) {
       await supabase.from('users').upsert({
