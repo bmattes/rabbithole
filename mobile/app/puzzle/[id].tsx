@@ -90,10 +90,19 @@ export default function PuzzleScreen() {
     const timeMs = stop()
     const hops = path.length - 1
     const score = computeScore({ optimalHops, playerHops: hops, timeMs })
+
+    // Build label strings to pass to results
+    const labelMap = Object.fromEntries(puzzle!.bubbles.map(b => [b.id, b.label]))
+    const playerPathLabels = path.map(id => labelMap[id] ?? id).join('|')
+    const optimalPathLabels = puzzle!.optimal_path.map(id => labelMap[id] ?? id).join('|')
+
     if (puzzle!.id !== 'mock-puzzle') {
       submitRun({ puzzleId: puzzle!.id, userId: 'anon', path, timeMs, score })
     }
-    router.replace(`/results/${puzzle!.id}?score=${score}&timeMs=${timeMs}&hops=${hops}&optimalHops=${optimalHops}`)
+
+    router.replace(
+      `/results/${puzzle!.id}?score=${score}&timeMs=${timeMs}&hops=${hops}&optimalHops=${optimalHops}&playerPath=${encodeURIComponent(playerPathLabels)}&optimalPath=${encodeURIComponent(optimalPathLabels)}`
+    )
   }
 
   function handlePathChange(path: string[]) {
