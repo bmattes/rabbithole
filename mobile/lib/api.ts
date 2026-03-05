@@ -58,6 +58,17 @@ export async function getLeaderboard(puzzleId: string) {
   return data ?? []
 }
 
+export async function getLeaderboardToday() {
+  const today = new Date().toISOString().split('T')[0]
+  const { data } = await supabase
+    .from('player_runs')
+    .select('user_id, score, time_ms, users(display_name), puzzles(date, start_concept, end_concept)')
+    .eq('puzzles.date', today)
+    .order('score', { ascending: false })
+    .limit(50)
+  return data ?? []
+}
+
 export async function getCategories() {
   const { data } = await supabase
     .from('categories')

@@ -1,11 +1,18 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { View, Text, FlatList, StyleSheet, ActivityIndicator } from 'react-native'
 import { useAuth } from '../../hooks/useAuth'
+import { getLeaderboardToday } from '../../lib/api'
 
 export default function LeaderboardScreen() {
   const { userId } = useAuth()
-  const entries: any[] = []
-  const loading = false
+  const [entries, setEntries] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    getLeaderboardToday()
+      .then(setEntries)
+      .finally(() => setLoading(false))
+  }, [])
 
   return (
     <View style={styles.container}>

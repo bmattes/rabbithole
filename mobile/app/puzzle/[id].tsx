@@ -4,6 +4,7 @@ import { useLocalSearchParams, router } from 'expo-router'
 import { PuzzleCanvas } from '../../components/PuzzleCanvas'
 import { usePuzzle } from '../../hooks/usePuzzle'
 import { useTimer } from '../../hooks/useTimer'
+import { useAuth } from '../../hooks/useAuth'
 import { computeScore } from '../../lib/scoring'
 import { submitRun } from '../../lib/api'
 import { separateBubbles } from '../../lib/bubbleLayout'
@@ -16,6 +17,7 @@ export default function PuzzleScreen() {
   const { id: categoryId } = useLocalSearchParams<{ id: string }>()
   const { puzzle: livePuzzle, loading } = usePuzzle(categoryId)
   const { elapsed, start, stop } = useTimer()
+  const { userId } = useAuth()
   const [started, setStarted] = useState(false)
   const [currentHops, setCurrentHops] = useState(0)
 
@@ -51,8 +53,8 @@ export default function PuzzleScreen() {
     const playerPathLabels = path.map(id => labelMap[id] ?? id).join('|')
     const optimalPathLabels = puzzle!.optimal_path.map(id => labelMap[id] ?? id).join('|')
 
-    if (!puzzle!.id.startsWith('mock-')) {
-      submitRun({ puzzleId: puzzle!.id, userId: 'anon', path, timeMs, score })
+    if (!puzzle!.id.startsWith('mock-') && userId) {
+      submitRun({ puzzleId: puzzle!.id, userId, path, timeMs, score })
     }
 
     router.replace(
