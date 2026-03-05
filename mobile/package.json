@@ -11,9 +11,13 @@
   },
   "jest": {
     "preset": "jest-expo",
-    "setupFilesAfterEach": ["@testing-library/jest-native/extend-expect"],
+    "testEnvironment": "node",
+    "moduleNameMapper": {
+      "expo/src/winter$": "<rootDir>/__mocks__/expoWinter.js",
+      "expo/src/winter/ImportMetaRegistry$": "<rootDir>/__mocks__/ImportMetaRegistry.js"
+    },
     "transformIgnorePatterns": [
-      "node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@sentry/react-native|native-base|react-native-svg)"
+      "/node_modules/(?!(.pnpm|react-native|@react-native|@react-native-community|expo|@expo|@expo-google-fonts|react-navigation|@react-navigation|@sentry/react-native|native-base|react-native-worklets))"
     ]
   },
   "dependencies": {
@@ -25,7 +29,8 @@
     "react": "19.2.0",
     "react-native": "0.83.2",
     "react-native-gesture-handler": "~2.30.0",
-    "react-native-reanimated": "4.2.1"
+    "react-native-reanimated": "4.2.1",
+    "react-native-worklets": "^0.5.0"
   },
   "devDependencies": {
     "@testing-library/jest-native": "^5.4.3",
