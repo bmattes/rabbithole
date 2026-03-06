@@ -2,6 +2,9 @@ export interface Entity {
   id: string
   label: string
   relatedIds: string[]
+  sitelinks?: number
+  // 'person' | 'team' | 'city' | 'film' | 'song' | 'label' | 'category' | 'other'
+  entityType?: string
 }
 
 export type Graph = Record<string, string[]>

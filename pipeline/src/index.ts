@@ -13,19 +13,51 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY!
 )
 
+const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+
 async function generatePuzzleForCategory(
   categoryId: string,
   categoryName: string,
   domain: CategoryDomain,
   date: string
 ) {
+  // Skip if already published for this date
+  const { data: existing } = await supabase
+    .from('puzzles')
+    .select('id')
+    .eq('category_id', categoryId)
+    .eq('date', date)
+    .eq('status', 'published')
+    .single()
+  if (existing) {
+    console.log(`[${categoryName}] ✓ Already published for ${date}, skipping`)
+    return existing.id
+  }
+
   console.log(`\n[${categoryName}] Fetching entities from Wikidata...`)
-  const entities = await fetchEntities(domain, 400)
+  const entities = await fetchEntities(domain, 1500)
   console.log(`[${categoryName}] Got ${entities.length} entities`)
 
   const graph = buildGraph(entities)
+
+  // Per-domain: restrict which entity types can be puzzle start/end nodes
+  // This prevents abstract category nodes (sports, genres, fields) from being anchors
+  const ANCHOR_TYPES: Record<string, string[]> = {
+    movies: ['film'],
+    sport: ['person', 'team', 'city'],
+    music: ['person', 'song'],
+    science: ['person'],
+    history: ['person'],
+  }
+  const anchorTypes = ANCHOR_TYPES[domain] ?? null
+
   const entityIds = entities
-    .filter(e => e.relatedIds.length >= 2) // only well-connected nodes as start/end
+    .filter(e => {
+      if (e.relatedIds.length < 2) return false
+      if (e.label.length > 30) return false
+      if (anchorTypes && e.entityType && !anchorTypes.includes(e.entityType)) return false
+      return true
+    })
     .map(e => e.id)
 
   let puzzle = null
@@ -35,7 +67,7 @@ async function generatePuzzleForCategory(
     const startId = entityIds[Math.floor(Math.random() * entityIds.length)]
     const endId = entityIds[Math.floor(Math.random() * entityIds.length)]
     if (startId === endId) continue
-    puzzle = composePuzzle({ entities, graph, startId, endId, targetBubbleCount: 16 })
+    puzzle = composePuzzle({ entities, graph, startId, endId, targetBubbleCount: 12 })
   }
 
   if (!puzzle) {
@@ -58,11 +90,12 @@ async function generatePuzzleForCategory(
   const { data, error } = await supabase.from('puzzles').upsert({
     category_id: categoryId,
     date,
-    start_concept: entityMap.get(puzzle.startId)?.label ?? puzzle.startId,
-    end_concept: entityMap.get(puzzle.endId)?.label ?? puzzle.endId,
+    start_concept: capitalize(entityMap.get(puzzle.startId)?.label ?? puzzle.startId),
+    end_concept: capitalize(entityMap.get(puzzle.endId)?.label ?? puzzle.endId),
     bubbles: puzzle.bubbles,
     connections: puzzle.connections,
     optimal_path: puzzle.optimalPath,
+    difficulty: puzzle.difficulty,
     narrative,
     status: 'published',
   }, { onConflict: 'category_id,date' }).select('id').single()

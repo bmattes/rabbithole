@@ -11,25 +11,34 @@ interface BubbleProps {
   pulse?: boolean
 }
 
-export const BUBBLE_RADIUS = 44
+// Hit target size — used for layout and touch detection
+export const BUBBLE_W = 140
+export const BUBBLE_H = 60
+export const BUBBLE_RADIUS = BUBBLE_H / 2
+export const PILL_MAX_W = 220
 
-const STATE_COLORS: Record<BubbleState, string> = {
-  idle: '#1e1e2e',
-  active: '#7c3aed',
+const PILL_COLORS: Record<'start' | 'end', string> = {
   start: '#16a34a',
   end: '#dc2626',
+}
+
+const TEXT_COLORS: Record<BubbleState, string> = {
+  idle: 'rgba(255,255,255,0.55)',
+  active: '#a78bfa',
+  start: '#fff',
+  end: '#fff',
   broken: '#ef4444',
 }
 
-export function Bubble({ label, state, position, index = 0, pulse }: BubbleProps) {
-  const translateY = useRef(new Animated.Value(60)).current
+export function Bubble({ label: rawLabel, state, position, index = 0, pulse }: BubbleProps) {
+  const label = rawLabel.charAt(0).toUpperCase() + rawLabel.slice(1)
+  const translateY = useRef(new Animated.Value(40)).current
   const opacity = useRef(new Animated.Value(0)).current
   const scale = useRef(new Animated.Value(1)).current
   const prevPulse = useRef(false)
 
-  // Entry animation
   useEffect(() => {
-    const delay = index * 60
+    const delay = index * 50
     const t = setTimeout(() => {
       Animated.parallel?.([
         Animated.spring(translateY, { toValue: 0, damping: 14, useNativeDriver: true }),
@@ -39,31 +48,40 @@ export function Bubble({ label, state, position, index = 0, pulse }: BubbleProps
     return () => clearTimeout(t)
   }, [])
 
-  // Pulse on commit
   useEffect(() => {
     if (pulse && !prevPulse.current) {
       Animated.sequence([
-        Animated.timing(scale, { toValue: 1.25, duration: 120, useNativeDriver: true }),
+        Animated.timing(scale, { toValue: 1.2, duration: 100, useNativeDriver: true }),
         Animated.spring(scale, { toValue: 1, damping: 8, useNativeDriver: true }),
       ]).start()
     }
     prevPulse.current = !!pulse
   }, [pulse])
 
+  const isPill = state === 'start' || state === 'end'
+  const displayW = isPill ? PILL_MAX_W : BUBBLE_W + 40
+
   return (
     <Animated.View
       testID="bubble-container"
       style={[
-        styles.bubble,
+        styles.container,
+        isPill ? [styles.pill, { backgroundColor: PILL_COLORS[state] }] : styles.textNode,
         {
-          backgroundColor: STATE_COLORS[state],
-          left: position.x - BUBBLE_RADIUS,
-          top: position.y - BUBBLE_RADIUS,
+          width: displayW,
+          left: position.x - displayW / 2,
+          top: position.y - BUBBLE_H / 2,
         },
         { transform: [{ translateY }, { scale }], opacity },
       ]}
     >
-      <Text style={styles.label} numberOfLines={3} adjustsFontSizeToFit minimumFontScale={0.6}>
+      <Text
+        style={[
+          isPill ? styles.pillLabel : styles.textLabel,
+          { color: TEXT_COLORS[state] },
+          state === 'active' && styles.textActive,
+        ]}
+      >
         {label}
       </Text>
     </Animated.View>
@@ -71,22 +89,31 @@ export function Bubble({ label, state, position, index = 0, pulse }: BubbleProps
 }
 
 const styles = StyleSheet.create({
-  bubble: {
+  container: {
     position: 'absolute',
-    width: BUBBLE_RADIUS * 2,
-    height: BUBBLE_RADIUS * 2,
-    borderRadius: BUBBLE_RADIUS,
+    minHeight: BUBBLE_H,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.15)',
   },
-  label: {
-    color: '#fff',
-    fontSize: 12,
+  pill: {
+    borderRadius: BUBBLE_H / 2,
+    paddingVertical: 10,
+  },
+  textNode: {
+    // No background — just floating text
+  },
+  pillLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    textAlign: 'center',
+    paddingHorizontal: 12,
+  },
+  textLabel: {
+    fontSize: 15,
     fontWeight: '600',
     textAlign: 'center',
-    paddingHorizontal: 6,
-    lineHeight: 15,
+  },
+  textActive: {
+    fontWeight: '800',
   },
 })

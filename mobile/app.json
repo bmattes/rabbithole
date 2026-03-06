@@ -13,8 +13,9 @@
       "backgroundColor": "#0a0a0a"
     },
     "ios": {
+      "buildNumber": "2",
       "supportsTablet": false,
-      "bundleIdentifier": "com.mewk.rabbithole",
+      "bundleIdentifier": "com.benmattes.rabbithole",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -34,21 +35,7 @@
     "plugins": [
       "expo-router",
       "expo-asset",
-      "expo-font",
-      [
-        "expo-build-properties",
-        {
-          "ios": {
-            "deploymentTarget": "16.0",
-            "newArchEnabled": true,
-            "useFrameworks": "static",
-            "podfileProperties": {
-              "CLANG_CXX_LANGUAGE_STANDARD": "c++20",
-              "RCT_NEW_ARCH_ENABLED": "1"
-            }
-          }
-        }
-      ]
+      "expo-font"
     ],
     "extra": {
       "router": {},

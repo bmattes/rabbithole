@@ -61,9 +61,9 @@ export const MOCK_PUZZLES: Record<string, PuzzleData> = {
     optimal_path: ['start', 'b2', 'b7', 'end'],
   },
 
-  basketball: {
-    id: 'mock-basketball',
-    category_id: 'basketball',
+  sport: {
+    id: 'mock-sport',
+    category_id: 'sport',
     date: '',
     start_concept: 'Michael Jordan',
     end_concept: 'Space Jam',

@@ -1,55 +1,80 @@
-import { BUBBLE_RADIUS } from '../components/Bubble'
+import { BUBBLE_W, BUBBLE_H } from '../components/Bubble'
 
-const DIAMETER = BUBBLE_RADIUS * 2
-const MIN_GAP = 12 // minimum space between bubble edges
-const MIN_DIST = DIAMETER + MIN_GAP
+const MIN_GAP = 16
+const MIN_DIST_X = BUBBLE_W + MIN_GAP
+const MIN_DIST_Y = BUBBLE_H + MIN_GAP
 
 interface Point { x: number; y: number }
 
+// Seeded pseudo-random so layout is stable across re-renders for the same puzzle
+function seededRandom(seed: number) {
+  let s = seed
+  return () => {
+    s = (s * 1664525 + 1013904223) & 0xffffffff
+    return (s >>> 0) / 0xffffffff
+  }
+}
+
 /**
- * Runs a simple force-separation pass to eliminate overlap.
- * Iterates until no two bubbles are closer than MIN_DIST, or max iterations reached.
+ * Randomly scatters middle bubbles within the canvas, then runs
+ * axis-aligned force-separation to resolve overlaps — giving an
+ * organic feel while guaranteeing everything fits on screen.
  */
 export function separateBubbles(
   positions: Point[],
   canvasWidth: number,
   canvasHeight: number,
   fixedIndices: Set<number> = new Set(),
-  iterations = 100
+  iterations = 200
 ): Point[] {
-  const pts = positions.map(p => ({ ...p }))
-  const padding = BUBBLE_RADIUS + 8
+  const n = positions.length
+  const padX = BUBBLE_W / 2 + 10
+  const padY = BUBBLE_H / 2 + 10
+  const rand = seededRandom(n * 1000 + Math.round(canvasWidth))
 
+  const pts: Point[] = positions.map((p, i) => {
+    if (fixedIndices.has(i)) {
+      // Fixed indices keep their relative vertical position but centre horizontally
+      if (i === 0) return { x: canvasWidth / 2, y: padY }
+      if (i === n - 1) return { x: canvasWidth / 2, y: canvasHeight - padY }
+      return { ...p }
+    }
+    // Random scatter across the full canvas area
+    return {
+      x: padX + rand() * (canvasWidth - padX * 2),
+      y: padY + rand() * (canvasHeight - padY * 2),
+    }
+  })
+
+  // Iterative axis-aligned separation
   for (let iter = 0; iter < iterations; iter++) {
     let moved = false
-    for (let i = 0; i < pts.length; i++) {
-      for (let j = i + 1; j < pts.length; j++) {
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
         const dx = pts[j].x - pts[i].x
         const dy = pts[j].y - pts[i].y
-        const dist = Math.sqrt(dx * dx + dy * dy)
-        if (dist < MIN_DIST && dist > 0) {
-          const overlap = (MIN_DIST - dist) / 2
-          const nx = dx / dist
-          const ny = dy / dist
-          if (!fixedIndices.has(i)) {
-            pts[i].x -= nx * overlap
-            pts[i].y -= ny * overlap
+        const overlapX = MIN_DIST_X - Math.abs(dx)
+        const overlapY = MIN_DIST_Y - Math.abs(dy)
+        if (overlapX > 0 && overlapY > 0) {
+          let pushX = 0, pushY = 0
+          if (overlapX < overlapY) {
+            pushX = (overlapX / 2 + 1) * Math.sign(dx || 1)
+          } else {
+            pushY = (overlapY / 2 + 1) * Math.sign(dy || 1)
           }
-          if (!fixedIndices.has(j)) {
-            pts[j].x += nx * overlap
-            pts[j].y += ny * overlap
-          }
+          if (!fixedIndices.has(i)) { pts[i].x -= pushX; pts[i].y -= pushY }
+          if (!fixedIndices.has(j)) { pts[j].x += pushX; pts[j].y += pushY }
           moved = true
         }
       }
     }
-    // Clamp to canvas bounds
-    for (let i = 0; i < pts.length; i++) {
+    for (let i = 0; i < n; i++) {
       if (fixedIndices.has(i)) continue
-      pts[i].x = Math.max(padding, Math.min(canvasWidth - padding, pts[i].x))
-      pts[i].y = Math.max(padding, Math.min(canvasHeight - padding, pts[i].y))
+      pts[i].x = Math.max(padX, Math.min(canvasWidth - padX, pts[i].x))
+      pts[i].y = Math.max(padY, Math.min(canvasHeight - padY, pts[i].y))
     }
     if (!moved) break
   }
+
   return pts
 }

@@ -1,7 +1,7 @@
 import React, { useCallback, useRef, useState } from 'react'
 import { View, StyleSheet, Dimensions, PanResponder } from 'react-native'
 import * as Haptics from 'expo-haptics'
-import { Bubble, BUBBLE_RADIUS, BubbleState } from './Bubble'
+import { Bubble, BUBBLE_W, BUBBLE_H, BubbleState } from './Bubble'
 import { ConnectionLine } from './ConnectionLine'
 import { RippleEffect } from './RippleEffect'
 
@@ -16,17 +16,20 @@ interface PuzzleCanvasProps {
   connections: Record<string, string[]>
   startId: string
   endId: string
+  minHops: number
   onPathComplete: (path: string[]) => void
   onPathChange?: (path: string[]) => void
+  onCanvasLayout?: (height: number) => void
 }
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
 const DWELL_MS = 300
 
 function hitTest(point: { x: number; y: number }, bubble: BubbleData): boolean {
-  const dx = point.x - bubble.position.x
-  const dy = point.y - bubble.position.y
-  return Math.sqrt(dx * dx + dy * dy) <= BUBBLE_RADIUS
+  return (
+    Math.abs(point.x - bubble.position.x) <= BUBBLE_W / 2 &&
+    Math.abs(point.y - bubble.position.y) <= BUBBLE_H / 2
+  )
 }
 
 export function PuzzleCanvas({
@@ -34,8 +37,10 @@ export function PuzzleCanvas({
   connections,
   startId,
   endId,
+  minHops,
   onPathComplete,
   onPathChange,
+  onCanvasLayout,
 }: PuzzleCanvasProps) {
   const [activePath, setActivePath] = useState<string[]>([])
   const [fingerPos, setFingerPos] = useState<{ x: number; y: number } | null>(null)
@@ -47,8 +52,18 @@ export function PuzzleCanvas({
   const isTracingRef = useRef(false)
   const onPathCompleteRef = useRef(onPathComplete)
   const onPathChangeRef = useRef(onPathChange)
+  const bubblesRef = useRef(bubbles)
+  const startIdRef = useRef(startId)
+  const endIdRef = useRef(endId)
+  const connectionsRef = useRef(connections)
+  const minHopsRef = useRef(minHops)
   onPathCompleteRef.current = onPathComplete
   onPathChangeRef.current = onPathChange
+  bubblesRef.current = bubbles
+  startIdRef.current = startId
+  endIdRef.current = endId
+  connectionsRef.current = connections
+  minHopsRef.current = minHops
 
   const dwellBubbleRef = useRef<string | null>(null)
   const dwellTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -57,8 +72,8 @@ export function PuzzleCanvas({
   const canvasViewRef = useRef<View>(null)
 
   const getBubble = useCallback(
-    (id: string) => bubbles.find((b) => b.id === id),
-    [bubbles]
+    (id: string) => bubblesRef.current.find((b) => b.id === id),
+    []
   )
 
   function toCanvas(pageX: number, pageY: number) {
@@ -66,12 +81,6 @@ export function PuzzleCanvas({
       x: pageX - canvasOriginRef.current.x,
       y: pageY - canvasOriginRef.current.y,
     }
-  }
-
-  function updatePath(newPath: string[]) {
-    activePathRef.current = newPath
-    setActivePath(newPath)
-    onPathChangeRef.current?.(newPath)
   }
 
   function clearDwell() {
@@ -83,25 +92,34 @@ export function PuzzleCanvas({
     setHoveringId(null)
   }
 
-  function connectBubble(bubble: BubbleData) {
+  const connectBubbleRef = useRef((bubble: BubbleData) => {
     const currentPath = activePathRef.current
     const existingIndex = currentPath.indexOf(bubble.id)
 
     if (existingIndex !== -1) {
-      updatePath(currentPath.slice(0, existingIndex + 1))
+      activePathRef.current = currentPath.slice(0, existingIndex + 1)
+      setActivePath(activePathRef.current)
+      onPathChangeRef.current?.(activePathRef.current)
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
     } else {
+      // Block landing on end node until minimum hops are reached
+      if (bubble.id === endIdRef.current && currentPath.length - 1 < minHopsRef.current) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
+        return
+      }
       const newPath = [...currentPath, bubble.id]
-      updatePath(newPath)
+      activePathRef.current = newPath
+      setActivePath(newPath)
+      onPathChangeRef.current?.(newPath)
       setLastConnectedId(bubble.id)
-      if (bubble.id === endId) {
+      if (bubble.id === endIdRef.current) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
       } else {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy)
       }
     }
     setHoveringId(null)
-  }
+  })
 
   const panResponder = useRef(
     PanResponder.create({
@@ -120,18 +138,22 @@ export function PuzzleCanvas({
             isTracingRef.current = true
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
           } else {
-            updatePath([])
+            activePathRef.current = []
+            setActivePath([])
+            onPathChangeRef.current?.([])
             setLastConnectedId(null)
             isTracingRef.current = false
           }
           return
         }
 
-        const start = getBubble(startId)
+        const start = getBubble(startIdRef.current)
         if (!start || !hitTest({ x, y }, start)) return
         isTracingRef.current = true
-        updatePath([startId])
-        setLastConnectedId(startId)
+        activePathRef.current = [startIdRef.current]
+        setActivePath([startIdRef.current])
+        onPathChangeRef.current?.([startIdRef.current])
+        setLastConnectedId(startIdRef.current)
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
       },
       onPanResponderMove: (evt) => {
@@ -144,7 +166,7 @@ export function PuzzleCanvas({
         const lastId = currentPath[currentPath.length - 1]
 
         let overBubble: BubbleData | null = null
-        for (const bubble of bubbles) {
+        for (const bubble of bubblesRef.current) {
           if (hitTest({ x, y }, bubble) && bubble.id !== lastId) {
             overBubble = bubble
             break
@@ -166,7 +188,7 @@ export function PuzzleCanvas({
         const capturedBubble = overBubble
         dwellTimerRef.current = setTimeout(() => {
           if (isTracingRef.current && dwellBubbleRef.current === capturedBubble.id) {
-            connectBubble(capturedBubble)
+            connectBubbleRef.current(capturedBubble)
             dwellBubbleRef.current = null
           }
         }, DWELL_MS)
@@ -177,8 +199,8 @@ export function PuzzleCanvas({
         isTracingRef.current = false
 
         const path = activePathRef.current
-        if (path[path.length - 1] === endId) {
-          const endBubble = bubbles.find(b => b.id === endId)
+        if (path[path.length - 1] === endIdRef.current) {
+          const endBubble = bubblesRef.current.find(b => b.id === endIdRef.current)
           if (endBubble) setRippleCenter(endBubble.position)
           onPathCompleteRef.current(path)
         }
@@ -205,7 +227,8 @@ export function PuzzleCanvas({
     <View
       ref={canvasViewRef}
       style={styles.canvas}
-      onLayout={() => {
+      onLayout={e => {
+        onCanvasLayout?.(e.nativeEvent.layout.height)
         canvasViewRef.current?.measure((_x, _y, _w, _h, pageX, pageY) => {
           canvasOriginRef.current = { x: pageX, y: pageY }
         })
