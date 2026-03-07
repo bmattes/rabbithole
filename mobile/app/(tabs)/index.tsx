@@ -1,7 +1,8 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { View, Text, Pressable, StyleSheet, ActivityIndicator, ScrollView } from 'react-native'
 import { router, useFocusEffect } from 'expo-router'
 import { useAuth } from '../../hooks/useAuth'
+import { useProgression } from '../../hooks/useProgression'
 import { getCategories } from '../../lib/api'
 
 const CATEGORY_EMOJIS: Record<string, string> = {
@@ -36,8 +37,15 @@ interface Category {
 
 export default function TodayScreen() {
   const { session, loading, signInAnonymously, userId } = useAuth()
-  const [categories, setCategories] = useState<Category[]>([])
+  const progression = useProgression(userId)
+  const [allCategories, setAllCategories] = useState<Category[]>([])
   const [categoriesLoading, setCategoriesLoading] = useState(true)
+
+  const categories = useMemo(() => {
+    const unlocked = progression.unlockedCategories
+    if (unlocked.length > 0) return allCategories.filter(c => unlocked.includes(c.id))
+    return allCategories.slice(0, 2)
+  }, [allCategories, progression.unlockedCategories])
 
   useEffect(() => {
     if (!loading && !session) {
@@ -49,7 +57,7 @@ export default function TodayScreen() {
     if (loading) return
     setCategoriesLoading(true)
     getCategories(userId).then(data => {
-      setCategories(data as Category[])
+      setAllCategories(data as Category[])
       setCategoriesLoading(false)
     })
   }, [userId, loading])
@@ -59,7 +67,7 @@ export default function TodayScreen() {
   // Re-fetch completion state every time this tab comes into focus
   useFocusEffect(useCallback(() => { loadCategories() }, [loadCategories]))
 
-  if (loading || categoriesLoading) {
+  if (loading || categoriesLoading || progression.loading) {
     return (
       <View style={styles.center}>
         <ActivityIndicator color="#7c3aed" />
@@ -92,6 +100,9 @@ export default function TodayScreen() {
               </View>
               <Text style={styles.cardHint}>
                 {done ? 'Completed today' : (CATEGORY_HINTS[cat.wikidata_domain] ?? '')}
+              </Text>
+              <Text style={styles.diffAvailable}>
+                {progression.unlockedDifficulties.join(' · ')}
               </Text>
             </View>
             {done
@@ -129,6 +140,7 @@ const styles = StyleSheet.create({
   diffText: { fontSize: 11, fontWeight: '700', textTransform: 'capitalize' },
   cardTitleDone: { color: '#555' },
   cardHint: { color: '#888', fontSize: 12, marginTop: 3 },
+  diffAvailable: { color: '#555', fontSize: 11, marginTop: 2 },
   cardArrow: { color: '#7c3aed', fontSize: 20, marginLeft: 8 },
   cardDone: { borderColor: '#1a2e1a', backgroundColor: '#111811' },
   cardCheck: { color: '#22c55e', fontSize: 20, fontWeight: '700', marginLeft: 8 },
