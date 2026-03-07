@@ -3,6 +3,7 @@ export interface Entity {
   label: string
   relatedIds: string[]
   sitelinks?: number
+  pageviews?: number  // monthly Wikipedia pageviews — better popularity signal than sitelinks
   // 'person' | 'team' | 'city' | 'film' | 'song' | 'label' | 'category' | 'other'
   entityType?: string
 }

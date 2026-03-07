@@ -53,16 +53,24 @@ function countShortestPaths(startId: string, endId: string, graph: Graph, optima
 function computeDifficulty(optimalPath: string[], pathCount: number, entityMap: Map<string, Entity>): Difficulty {
   const hops = optimalPath.length - 1
 
-  // Average sitelinks of intermediate nodes (exclude start/end)
+  // Average familiarity of intermediate nodes (exclude start/end)
+  // Prefer pageviews (Wikipedia monthly traffic) over sitelinks — better pop culture signal
+  // pageviews scale: ~50k = moderately known, ~500k = well-known, ~2M+ = famous
+  // sitelinks scale: ~50 = moderately known, ~150 = well-known
   const middleIds = optimalPath.slice(1, -1)
-  const sitelinkValues = middleIds.map(id => entityMap.get(id)?.sitelinks ?? 0).filter(s => s > 0)
-  const avgSitelinks = sitelinkValues.length > 0
-    ? sitelinkValues.reduce((a, b) => a + b, 0) / sitelinkValues.length
+  const familiarityValues = middleIds.map(id => {
+    const e = entityMap.get(id)
+    if (!e) return 0
+    if (e.pageviews !== undefined) return e.pageviews / 3000  // normalize to ~sitelinks scale
+    return e.sitelinks ?? 0
+  }).filter(s => s > 0)
+  const avgFamiliarity = familiarityValues.length > 0
+    ? familiarityValues.reduce((a, b) => a + b, 0) / familiarityValues.length
     : 0
 
-  // familiarity: high (>150 sitelinks avg) = well-known, low (<50) = obscure
-  const familiar = avgSitelinks > 150
-  const obscure = avgSitelinks < 60 || avgSitelinks === 0
+  // familiarity: high (>150 normalized) = well-known, low (<60) = obscure
+  const familiar = avgFamiliarity > 150
+  const obscure = avgFamiliarity < 60 || avgFamiliarity === 0
 
   // Hard: long path OR obscure intermediates with few routes
   if (hops >= 6) return 'hard'

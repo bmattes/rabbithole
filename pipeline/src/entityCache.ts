@@ -2,6 +2,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { Entity } from './graphBuilder'
 import { fetchEntities, CategoryDomain } from './wikidata'
+import { enrichWithPageviews } from './pageviewEnricher'
 
 const CACHE_DIR = path.join(__dirname, '../../.entity-cache')
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
@@ -49,6 +50,7 @@ export async function fetchEntitiesCached(
   }
 
   const entities = await fetchEntities(domain, limit)
+  await enrichWithPageviews(entities)
   writeCache(domain, entities)
   return entities
 }
