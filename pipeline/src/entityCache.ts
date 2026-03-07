@@ -3,6 +3,7 @@ import * as path from 'path'
 import { Entity } from './graphBuilder'
 import { fetchEntities, CategoryDomain, WikidataDomain } from './wikidata'
 import { fetchMusicBrainzEntities, MusicBrainzDomain } from './musicbrainz'
+import { fetchComicVineEntities } from './comicvine'
 import { enrichWithPageviews } from './pageviewEnricher'
 
 const CACHE_DIR = path.join(__dirname, '../../.entity-cache')
@@ -51,12 +52,16 @@ export async function fetchEntitiesCached(
   }
 
   const isMusicBrainz = (domain as string).startsWith('mb_')
-  const entities = isMusicBrainz
-    ? await fetchMusicBrainzEntities(domain as MusicBrainzDomain, limit)
-    : await fetchEntities(domain as WikidataDomain, limit)
+  const isComicVine = domain === 'comicvine'
 
-  if (!isMusicBrainz) {
-    // MusicBrainz entities have non-Wikidata IDs — pageview enrichment only applies to Wikidata QIDs
+  const entities = isComicVine
+    ? await fetchComicVineEntities(limit)
+    : isMusicBrainz
+      ? await fetchMusicBrainzEntities(domain as MusicBrainzDomain, limit)
+      : await fetchEntities(domain as WikidataDomain, limit)
+
+  if (!isMusicBrainz && !isComicVine) {
+    // Only Wikidata entities have QIDs — pageview enrichment only applies to those
     await enrichWithPageviews(entities)
   }
 
