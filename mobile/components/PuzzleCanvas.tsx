@@ -4,6 +4,7 @@ import * as Haptics from 'expo-haptics'
 import { Bubble, BUBBLE_W, BUBBLE_H, BubbleState } from './Bubble'
 import { ConnectionLine } from './ConnectionLine'
 import { RippleEffect } from './RippleEffect'
+import { colors } from '../lib/theme'
 
 export interface BubbleData {
   id: string
@@ -282,5 +283,5 @@ export function PuzzleCanvas({
 }
 
 const styles = StyleSheet.create({
-  canvas: { flex: 1, backgroundColor: '#0a0a0a' },
+  canvas: { flex: 1, backgroundColor: colors.bg },
 })

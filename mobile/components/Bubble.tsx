@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react'
 import { Text, StyleSheet, Animated } from 'react-native'
+import { colors } from '../lib/theme'
 
 export type BubbleState = 'idle' | 'active' | 'start' | 'end' | 'broken'
 
@@ -23,8 +24,8 @@ const PILL_COLORS: Record<'start' | 'end', string> = {
 }
 
 const TEXT_COLORS: Record<BubbleState, string> = {
-  idle: 'rgba(255,255,255,0.55)',
-  active: '#a78bfa',
+  idle: colors.textPrimary,
+  active: colors.accent,
   start: '#fff',
   end: '#fff',
   broken: '#ef4444',

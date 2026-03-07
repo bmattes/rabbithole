@@ -25,7 +25,7 @@ function cubicBezierPath(from: Point, to: Point): string {
 }
 
 export function ConnectionLine({ from, to, active, broken, width, height }: ConnectionLineProps) {
-  const color = broken ? '#ef4444' : active ? '#7c3aed' : 'rgba(255,255,255,0.25)'
+  const color = broken ? '#ef4444' : active ? '#7c3aed' : 'rgba(0,0,0,0.15)'
   const dashed = broken ? '8,4' : !active ? '5,5' : undefined
   return (
     <View style={[StyleSheet.absoluteFill, { width, height }]} pointerEvents="none">

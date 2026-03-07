@@ -9,6 +9,7 @@ import { useProgression } from '../../hooks/useProgression'
 import { computeScore } from '../../lib/scoring'
 import { submitRun } from '../../lib/api'
 import { separateBubbles } from '../../lib/bubbleLayout'
+import { colors } from '../../lib/theme'
 
 
 const DOMAIN_HINTS: Record<string, string> = {
@@ -84,7 +85,7 @@ export default function PuzzleScreen() {
     )
   }
 
-  const timerColor = elapsed < 60000 ? '#fff' : elapsed < 180000 ? '#eab308' : '#f97316'
+  const timerColor = elapsed < 60000 ? colors.textPrimary : elapsed < 180000 ? '#d97706' : '#dc2626'
   const minutes = Math.floor(elapsed / 60000)
   const seconds = String(Math.floor((elapsed % 60000) / 1000)).padStart(2, '0')
   const hopColor = currentHops === 0 ? '#555' : currentHops <= optimalHops ? '#7c3aed' : '#eab308'
@@ -136,25 +137,34 @@ export default function PuzzleScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0a0a0a' },
-  center: { flex: 1, backgroundColor: '#0a0a0a', alignItems: 'center', justifyContent: 'center' },
-  header: { paddingTop: 56, paddingHorizontal: 20, paddingBottom: 8, flexDirection: 'row', alignItems: 'flex-start' },
-  backBtn: { paddingRight: 10, paddingTop: 2 },
-  backText: { color: '#7c3aed', fontSize: 22 },
+  container: { flex: 1, backgroundColor: colors.bg },
+  center: { flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' },
+  header: {
+    paddingTop: 56,
+    paddingHorizontal: 20,
+    paddingBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: colors.bgCard,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  backBtn: { paddingRight: 12, paddingTop: 2 },
+  backText: { color: colors.accent, fontSize: 22 },
   headerMiddle: { flex: 1 },
-  title: { color: '#fff', fontSize: 16, fontWeight: '700', lineHeight: 21 },
-  constraintRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
-  constraint: { color: '#7c3aed', fontSize: 11, fontWeight: '600' },
+  title: { color: colors.textPrimary, fontSize: 16, fontWeight: '700', lineHeight: 21 },
+  constraintRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 3 },
+  constraint: { color: colors.accent, fontSize: 11, fontWeight: '600' },
   diffBadge: { fontSize: 10, fontWeight: '700', textTransform: 'capitalize', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 },
-  diffEasy: { color: '#22c55e', backgroundColor: '#22c55e22' },
-  diffMedium: { color: '#eab308', backgroundColor: '#eab30822' },
-  diffHard: { color: '#ef4444', backgroundColor: '#ef444422' },
+  diffEasy: { color: '#22c55e', backgroundColor: '#f0fdf4' },
+  diffMedium: { color: '#d97706', backgroundColor: '#fffbeb' },
+  diffHard: { color: '#dc2626', backgroundColor: '#fef2f2' },
   headerRight: { alignItems: 'flex-end', marginLeft: 12 },
   timer: { fontSize: 18, fontWeight: '700', marginBottom: 2 },
   hopBadge: { flexDirection: 'row', alignItems: 'baseline' },
   hopCount: { fontSize: 15, fontWeight: '800' },
-  hopLabel: { color: '#555', fontSize: 12 },
-  error: { color: '#ef4444', fontSize: 16, marginBottom: 20 },
+  hopLabel: { color: colors.textTertiary, fontSize: 12 },
+  error: { color: colors.error, fontSize: 16, marginBottom: 20 },
   backFallback: { paddingVertical: 10, paddingHorizontal: 20 },
-  backFallbackText: { color: '#7c3aed', fontSize: 16 },
+  backFallbackText: { color: colors.accent, fontSize: 16 },
 })
