@@ -2,7 +2,7 @@ import { Entity } from './graphBuilder'
 
 const WIKIDATA_ENDPOINT = 'https://query.wikidata.org/sparql'
 
-export type WikidataDomain = 'movies' | 'sport' | 'music' | 'science' | 'history'
+export type WikidataDomain = 'movies' | 'sport' | 'music' | 'science' | 'history' | 'comics'
 export type CategoryDomain = WikidataDomain | 'mb_rock' | 'mb_hiphop' | 'mb_pop' | 'mb_rnb' | 'mb_country' | 'mb_electronic'
 
 // Sport uses multiple focused queries to avoid Wikidata timeouts
@@ -96,12 +96,44 @@ const MUSIC_TYPES: [string, string][] = [
   ['song', 'person'],    // song → performer
 ]
 
+// Comics: character → creator, character → fictional universe, character → publisher
+const COMICS_SUBQUERIES = [
+  // Character → creator (person)
+  (limit: number) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  ?a wdt:P31 wd:Q1114461; wdt:P170 ?b.
+  ?b wdt:P31 wd:Q5.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 5)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`,
+  // Character → fictional universe
+  (limit: number) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  ?a wdt:P31 wd:Q1114461; wdt:P1080 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 5)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`,
+  // Character → publisher
+  (limit: number) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  ?a wdt:P31 wd:Q1114461; wdt:P123 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 5)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`,
+]
+const COMICS_TYPES: [string, string][] = [
+  ['character', 'person'],    // character → creator
+  ['character', 'universe'],  // character → fictional universe
+  ['character', 'publisher'], // character → publisher
+]
+
 // Each domain query returns pairs of (primary entity, related entity)
 const DOMAIN_QUERIES: Record<WikidataDomain, (limit: number) => string> = {
   // placeholder — uses subqueries instead
   movies: (_limit) => '',
   sport: (_limit) => '',
   music: (_limit) => '',
+  comics: (_limit) => '',
 
   // employer (P108) and field of work (P101) — "Scientist → Institution/Field → Scientist"
   // ?a is always a person, ?b is institution or field (both fine as bridges, only person as anchor)
@@ -211,6 +243,7 @@ const SPORT_TYPES: [string, string][] = [
   ['person', 'team'],   // coach → team
   ['team', 'city'],     // team → city
 ]
+// COMICS_TYPES defined above with COMICS_SUBQUERIES
 // For single-query domains, type hint applied to all rows
 const SINGLE_QUERY_TYPES: Partial<Record<WikidataDomain, [string, string]>> = {
   science: ['person', 'other'],  // scientist → institution/field
@@ -221,11 +254,13 @@ export async function fetchEntities(domain: WikidataDomain, limit = 300): Promis
   const subqueries =
     domain === 'movies' ? MOVIES_SUBQUERIES :
     domain === 'sport'  ? SPORT_SUBQUERIES  :
-    domain === 'music'  ? MUSIC_SUBQUERIES  : null
+    domain === 'music'  ? MUSIC_SUBQUERIES  :
+    domain === 'comics' ? COMICS_SUBQUERIES : null
   const typeHints =
     domain === 'movies' ? MOVIES_TYPES :
     domain === 'sport'  ? SPORT_TYPES  :
-    domain === 'music'  ? MUSIC_TYPES  : null
+    domain === 'music'  ? MUSIC_TYPES  :
+    domain === 'comics' ? COMICS_TYPES : null
 
   if (subqueries && typeHints) {
     const perQuery = Math.ceil(limit / subqueries.length)
