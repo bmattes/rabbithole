@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { View, Text, ScrollView, StyleSheet, ActivityIndicator, TextInput, Pressable, KeyboardAvoidingView, Platform } from 'react-native'
 import { useAuth } from '../../hooks/useAuth'
+import { useProgression } from '../../hooks/useProgression'
 import { getMyRuns, getDisplayName, updateDisplayName } from '../../lib/api'
 
 const CATEGORY_EMOJIS: Record<string, string> = {
@@ -13,6 +14,7 @@ const CATEGORY_EMOJIS: Record<string, string> = {
 
 export default function ProfileScreen() {
   const { userId } = useAuth()
+  const progression = useProgression(userId)
   const [runs, setRuns] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [displayName, setDisplayName] = useState('')
@@ -86,6 +88,20 @@ export default function ProfileScreen() {
             <Text style={styles.saveBtnText}>{saved ? '✓' : 'Save'}</Text>
           </Pressable>
         </View>
+      </View>
+
+      {/* Level Card */}
+      <View style={styles.levelCard}>
+        <View style={styles.levelRow}>
+          <Text style={styles.levelNum}>Level {progression.level}</Text>
+          <Text style={styles.levelTitle}>{progression.title}</Text>
+          {progression.isSubscriber && <Text style={styles.plusBadge}>+</Text>}
+        </View>
+        <View style={styles.xpBarBg}>
+          <View style={[styles.xpBarFill, { width: `${Math.round((progression.xpInLevel / progression.xpForNextLevel) * 100)}%` as any }]} />
+        </View>
+        <Text style={styles.xpLabel}>{progression.xpInLevel} / {progression.xpForNextLevel} XP · {progression.totalXP} total</Text>
+        <Text style={styles.streakLabel}>🔥 {progression.streak} day streak</Text>
       </View>
 
       <Text style={styles.title2}>My Stats</Text>
@@ -241,4 +257,20 @@ const styles = StyleSheet.create({
   runTitle: { color: '#fff', fontSize: 14, fontWeight: '600' },
   runMeta: { color: '#555', fontSize: 12, marginTop: 2 },
   runScore: { color: '#7c3aed', fontSize: 16, fontWeight: '700', marginLeft: 12 },
+  levelCard: {
+    backgroundColor: '#1e1e2e',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#2a2a3e',
+  },
+  levelRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
+  levelNum: { color: '#fff', fontSize: 22, fontWeight: '800' },
+  levelTitle: { color: '#7c3aed', fontSize: 16, fontWeight: '600' },
+  plusBadge: { color: '#f59e0b', fontSize: 16, fontWeight: '800', marginLeft: 4 },
+  xpBarBg: { height: 6, backgroundColor: '#2a2a3e', borderRadius: 3, marginBottom: 6 },
+  xpBarFill: { height: 6, backgroundColor: '#7c3aed', borderRadius: 3 },
+  xpLabel: { color: '#666', fontSize: 12 },
+  streakLabel: { color: '#888', fontSize: 13, marginTop: 6 },
 })
