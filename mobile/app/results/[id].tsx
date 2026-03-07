@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { View, Text, ScrollView, StyleSheet, Pressable } from 'react-native'
 import { useLocalSearchParams, router } from 'expo-router'
-import { awardXP } from '../../lib/api'
+import { awardXP, localDateString } from '../../lib/api'
 import { computeRunXP } from '../../lib/progression'
 import { useAuth } from '../../hooks/useAuth'
 
@@ -51,7 +51,7 @@ const pathStyles = StyleSheet.create({
 })
 
 export default function ResultsScreen() {
-  const { id: puzzleId, score, timeMs, hops, optimalHops, playerPath, optimalPath, narrative } =
+  const { id: puzzleId, score, timeMs, hops, optimalHops, playerPath, optimalPath, narrative, difficulty } =
     useLocalSearchParams<{
       id: string
       score: string
@@ -61,6 +61,7 @@ export default function ResultsScreen() {
       playerPath: string
       optimalPath: string
       narrative: string
+      difficulty: string
     }>()
 
   const { userId } = useAuth()
@@ -85,17 +86,17 @@ export default function ResultsScreen() {
     if (xpAwarded.current) return
     xpAwarded.current = true
     const xp = computeRunXP({
-      difficulty: 'easy', // stub — puzzle difficulty not passed via params yet
+      difficulty: (difficulty as 'easy' | 'medium' | 'hard') ?? 'easy',
       isOptimalPath: samePathAsOptimal,
       timeMs: totalMs,
-      streakDay: 1, // stub — will be wired to real streak in a future task
+      streakDay: 0, // will be wired to real streak in a future task
     })
     setEarnedXP(xp)
     if (userId) {
       awardXP({
         userId,
         xp,
-        playedDate: new Date().toISOString().split('T')[0],
+        playedDate: localDateString(),
       }).then(({ totalXP, newStreak }) => {
         console.log('[Results] XP awarded:', xp, 'total:', totalXP, 'streak:', newStreak)
       })
