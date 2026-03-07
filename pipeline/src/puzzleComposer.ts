@@ -176,3 +176,36 @@ export function composePuzzle({
 
   return { startId, endId, bubbles, connections, optimalPath: trueOptimalPath, difficulty }
 }
+
+/**
+ * Attempt to compose a puzzle that matches the target difficulty.
+ * Retries up to maxAttempts times, picking random start/end pairs each time.
+ * Returns the first puzzle that matches, or null if none found.
+ */
+export function composePuzzleForDifficulty({
+  entities,
+  graph,
+  entityIds,
+  targetDifficulty,
+  targetBubbleCount = 12,
+  maxAttempts = 150,
+}: {
+  entities: Entity[]
+  graph: Graph
+  entityIds: string[]
+  targetDifficulty: Difficulty
+  targetBubbleCount?: number
+  maxAttempts?: number
+}): ComposedPuzzle | null {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const startId = entityIds[Math.floor(Math.random() * entityIds.length)]
+    const endId = entityIds[Math.floor(Math.random() * entityIds.length)]
+    if (startId === endId) continue
+
+    const puzzle = composePuzzle({ entities, graph, startId, endId, targetBubbleCount })
+    if (puzzle && puzzle.difficulty === targetDifficulty) {
+      return puzzle
+    }
+  }
+  return null
+}
