@@ -204,3 +204,99 @@ export async function getMyRuns(userId: string) {
   if (error) console.error('[getMyRuns] error:', error.message)
   return data ?? []
 }
+
+export async function awardXP({
+  userId,
+  xp,
+  playedDate,
+}: {
+  userId: string
+  xp: number
+  playedDate: string // 'YYYY-MM-DD'
+}): Promise<{ totalXP: number; newStreak: number }> {
+  const { data: user, error: fetchError } = await supabase
+    .from('users')
+    .select('total_xp, streak, last_played_date')
+    .eq('id', userId)
+    .single()
+
+  if (fetchError || !user) {
+    console.error('[awardXP] fetch failed:', fetchError?.message)
+    return { totalXP: 0, newStreak: 0 }
+  }
+
+  const lastPlayed = user.last_played_date as string | null
+  const yesterday = new Date(playedDate)
+  yesterday.setDate(yesterday.getDate() - 1)
+  const yesterdayStr = yesterday.toISOString().split('T')[0]
+
+  let newStreak = user.streak as number
+  if (lastPlayed === yesterdayStr) {
+    newStreak = (user.streak as number) + 1
+  } else if (lastPlayed !== playedDate) {
+    newStreak = 1
+  }
+
+  const newTotalXP = (user.total_xp as number) + xp
+
+  const { error: updateError } = await supabase
+    .from('users')
+    .update({
+      total_xp: newTotalXP,
+      streak: newStreak,
+      last_played_date: playedDate,
+    })
+    .eq('id', userId)
+
+  if (updateError) {
+    console.error('[awardXP] update failed:', updateError.message)
+    return { totalXP: 0, newStreak: 0 }
+  }
+
+  return { totalXP: newTotalXP, newStreak }
+}
+
+export async function getProgression(userId: string): Promise<{
+  totalXP: number
+  streak: number
+  unlockedCategories: string[]
+  isSubscriber: boolean
+} | null> {
+  const { data, error } = await supabase
+    .from('users')
+    .select('total_xp, streak, unlocked_categories, is_subscriber')
+    .eq('id', userId)
+    .single()
+
+  if (error || !data) return null
+
+  return {
+    totalXP: (data.total_xp as number) ?? 0,
+    streak: (data.streak as number) ?? 0,
+    unlockedCategories: (data.unlocked_categories as string[]) ?? [],
+    isSubscriber: (data.is_subscriber as boolean) ?? false,
+  }
+}
+
+export async function saveUnlockedCategory(userId: string, categoryId: string): Promise<void> {
+  const { data, error: fetchError } = await supabase
+    .from('users')
+    .select('unlocked_categories')
+    .eq('id', userId)
+    .single()
+
+  if (fetchError) {
+    console.error('[saveUnlockedCategory] fetch failed:', fetchError.message)
+    return
+  }
+
+  const current: string[] = (data?.unlocked_categories as string[]) ?? []
+  if (current.includes(categoryId)) return
+
+  const { error } = await supabase
+    .from('users')
+    .update({ unlocked_categories: [...current, categoryId] })
+    .eq('id', userId)
+
+  if (error) console.error('[saveUnlockedCategory] update failed:', error.message)
+}
