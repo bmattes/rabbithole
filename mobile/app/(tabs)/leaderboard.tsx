@@ -2,14 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { View, Text, FlatList, StyleSheet, ActivityIndicator, Pressable, ScrollView } from 'react-native'
 import { useAuth } from '../../hooks/useAuth'
 import { getCategories, getLeaderboardForCategory } from '../../lib/api'
-
-const CATEGORY_EMOJIS: Record<string, string> = {
-  movies: '🎬',
-  sport: '🏆',
-  music: '🎵',
-  science: '🔬',
-  history: '📜',
-}
+import { CATEGORY_EMOJIS } from '../../lib/categoryEmojis'
 
 interface Category {
   id: string

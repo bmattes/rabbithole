@@ -2,15 +2,9 @@ import React, { useEffect, useRef, useState } from 'react'
 import { View, Text, ScrollView, StyleSheet, ActivityIndicator, TextInput, Pressable, KeyboardAvoidingView, Platform } from 'react-native'
 import { useAuth } from '../../hooks/useAuth'
 import { useProgression } from '../../hooks/useProgression'
-import { getMyRuns, getDisplayName, updateDisplayName } from '../../lib/api'
-
-const CATEGORY_EMOJIS: Record<string, string> = {
-  movies: '🎬',
-  sport: '🏆',
-  music: '🎵',
-  science: '🔬',
-  history: '📜',
-}
+import { getMyRuns, getDisplayName, updateDisplayName, getCategories, saveUnlockedCategory } from '../../lib/api'
+import { CategoryUnlockModal } from '../../components/CategoryUnlockModal'
+import { CATEGORY_EMOJIS } from '../../lib/categoryEmojis'
 
 export default function ProfileScreen() {
   const { userId } = useAuth()
@@ -21,12 +15,36 @@ export default function ProfileScreen() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [showUnlockModal, setShowUnlockModal] = useState(false)
+  const [availableToUnlock, setAvailableToUnlock] = useState<Array<{ id: string; name: string; wikidata_domain: string }>>([])
 
   useEffect(() => {
     if (!userId) return
     getMyRuns(userId).then(setRuns).finally(() => setLoading(false))
     getDisplayName(userId).then(name => { if (name) setDisplayName(name) })
   }, [userId])
+
+  useEffect(() => {
+    if (progression.loading) return
+    const needsChoice = progression.categorySlots > progression.unlockedCategories.length
+    if (!needsChoice) return
+    let cancelled = false
+    getCategories(null).then(all => {
+      if (cancelled) return
+      const available = (all as Array<{ id: string; name: string; wikidata_domain: string }>)
+        .filter(c => !progression.unlockedCategories.includes(c.id))
+      setAvailableToUnlock(available)
+      if (available.length > 0) setShowUnlockModal(true)
+    })
+    return () => { cancelled = true }
+  }, [progression.loading, progression.categorySlots, progression.unlockedCategories])
+
+  async function handleCategoryUnlock(categoryId: string) {
+    setShowUnlockModal(false)
+    if (!userId) return
+    await saveUnlockedCategory(userId, categoryId)
+    progression.refresh()
+  }
 
   async function handleSaveName() {
     if (!userId || !displayName.trim()) return
@@ -180,6 +198,11 @@ export default function ProfileScreen() {
         </>
       )}
     </ScrollView>
+    <CategoryUnlockModal
+      visible={showUnlockModal}
+      availableCategories={availableToUnlock}
+      onSelect={handleCategoryUnlock}
+    />
     </KeyboardAvoidingView>
   )
 }

@@ -4,14 +4,7 @@ import { router, useFocusEffect } from 'expo-router'
 import { useAuth } from '../../hooks/useAuth'
 import { useProgression } from '../../hooks/useProgression'
 import { getCategories } from '../../lib/api'
-
-const CATEGORY_EMOJIS: Record<string, string> = {
-  movies: '🎬',
-  sport: '🏆',
-  music: '🎵',
-  science: '🔬',
-  history: '📜',
-}
+import { CATEGORY_EMOJIS } from '../../lib/categoryEmojis'
 
 const CATEGORY_HINTS: Record<string, string> = {
   movies: 'connected by directors, cast & studios',
