@@ -14,7 +14,7 @@ export interface Puzzle {
   domain?: string
 }
 
-function localDateString() {
+export function localDateString() {
   const d = new Date()
   const y = d.getFullYear()
   const m = String(d.getMonth() + 1).padStart(2, '0')
@@ -32,11 +32,15 @@ export function isInFreeArchive(puzzleDateStr: string): boolean {
   return puzzleDate >= cutoff
 }
 
-export async function getTodaysPuzzle(categoryId: string): Promise<Puzzle | null> {
+export async function getTodaysPuzzle(
+  categoryId: string,
+  difficulty: 'easy' | 'medium' | 'hard' = 'easy'
+): Promise<Puzzle | null> {
   const { data, error } = await supabase
     .from('puzzles')
     .select('*')
     .eq('category_id', categoryId)
+    .eq('difficulty', difficulty)
     .eq('status', 'published')
     .order('date', { ascending: false })
     .limit(1)
@@ -44,7 +48,6 @@ export async function getTodaysPuzzle(categoryId: string): Promise<Puzzle | null
 
   if (error) return null
 
-  // Fetch domain from category
   const { data: cat } = await supabase
     .from('categories')
     .select('wikidata_domain')
