@@ -4,7 +4,7 @@ dotenv.config()
 import { createClient } from '@supabase/supabase-js'
 import { fetchEntities, CategoryDomain } from './wikidata'
 import { buildGraph } from './graphBuilder'
-import { composePuzzle } from './puzzleComposer'
+import { composePuzzleForDifficulty, Difficulty } from './puzzleComposer'
 import { generateNarrative } from './narrativeGenerator'
 import cron from 'node-cron'
 
@@ -21,27 +21,12 @@ async function generatePuzzleForCategory(
   domain: CategoryDomain,
   date: string
 ) {
-  // Skip if already published for this date
-  const { data: existing } = await supabase
-    .from('puzzles')
-    .select('id')
-    .eq('category_id', categoryId)
-    .eq('date', date)
-    .eq('status', 'published')
-    .single()
-  if (existing) {
-    console.log(`[${categoryName}] ✓ Already published for ${date}, skipping`)
-    return existing.id
-  }
-
   console.log(`\n[${categoryName}] Fetching entities from Wikidata...`)
   const entities = await fetchEntities(domain, 1500)
   console.log(`[${categoryName}] Got ${entities.length} entities`)
 
   const graph = buildGraph(entities)
 
-  // Per-domain: restrict which entity types can be puzzle start/end nodes
-  // This prevents abstract category nodes (sports, genres, fields) from being anchors
   const ANCHOR_TYPES: Record<string, string[]> = {
     movies: ['film'],
     sport: ['person', 'team', 'city'],
@@ -60,53 +45,70 @@ async function generatePuzzleForCategory(
     })
     .map(e => e.id)
 
-  let puzzle = null
-  let attempts = 0
-  while (!puzzle && attempts < 100) {
-    attempts++
-    const startId = entityIds[Math.floor(Math.random() * entityIds.length)]
-    const endId = entityIds[Math.floor(Math.random() * entityIds.length)]
-    if (startId === endId) continue
-    puzzle = composePuzzle({ entities, graph, startId, endId, targetBubbleCount: 12 })
+  const difficulties: Difficulty[] = ['easy', 'medium', 'hard']
+
+  for (const difficulty of difficulties) {
+    // Skip if already published for this date + difficulty
+    const { data: existing } = await supabase
+      .from('puzzles')
+      .select('id')
+      .eq('category_id', categoryId)
+      .eq('date', date)
+      .eq('difficulty', difficulty)
+      .eq('status', 'published')
+      .single()
+
+    if (existing) {
+      console.log(`[${categoryName}/${difficulty}] ✓ Already published for ${date}, skipping`)
+      continue
+    }
+
+    console.log(`[${categoryName}/${difficulty}] Composing puzzle...`)
+    const puzzle = composePuzzleForDifficulty({
+      entities,
+      graph,
+      entityIds,
+      targetDifficulty: difficulty,
+      maxAttempts: 150,
+    })
+
+    if (!puzzle) {
+      console.error(`[${categoryName}/${difficulty}] Failed to compose puzzle after 150 attempts`)
+      continue
+    }
+
+    const entityMap = new Map(entities.map(e => [e.id, e]))
+    const pathLabels = puzzle.optimalPath.map(id => entityMap.get(id)?.label ?? id)
+    console.log(`[${categoryName}/${difficulty}] Path: ${pathLabels.join(' → ')}`)
+
+    console.log(`[${categoryName}/${difficulty}] Generating narrative...`)
+    const narrative = await generateNarrative({
+      startLabel: entityMap.get(puzzle.startId)?.label ?? puzzle.startId,
+      endLabel: entityMap.get(puzzle.endId)?.label ?? puzzle.endId,
+      pathLabels,
+      category: categoryName,
+    })
+
+    const { data, error } = await supabase.from('puzzles').upsert({
+      category_id: categoryId,
+      date,
+      start_concept: capitalize(entityMap.get(puzzle.startId)?.label ?? puzzle.startId),
+      end_concept: capitalize(entityMap.get(puzzle.endId)?.label ?? puzzle.endId),
+      bubbles: puzzle.bubbles,
+      connections: puzzle.connections,
+      optimal_path: puzzle.optimalPath,
+      difficulty: puzzle.difficulty,
+      narrative,
+      status: 'published',
+    }, { onConflict: 'category_id,date,difficulty' }).select('id').single()
+
+    if (error) {
+      console.error(`[${categoryName}/${difficulty}] DB error:`, error.message)
+      continue
+    }
+
+    console.log(`[${categoryName}/${difficulty}] ✓ Published puzzle ${data.id}`)
   }
-
-  if (!puzzle) {
-    console.error(`[${categoryName}] Failed to compose puzzle after ${attempts} attempts`)
-    return null
-  }
-
-  const entityMap = new Map(entities.map(e => [e.id, e]))
-  const pathLabels = puzzle.optimalPath.map(id => entityMap.get(id)?.label ?? id)
-  console.log(`[${categoryName}] Path: ${pathLabels.join(' → ')}`)
-
-  console.log(`[${categoryName}] Generating narrative...`)
-  const narrative = await generateNarrative({
-    startLabel: entityMap.get(puzzle.startId)?.label ?? puzzle.startId,
-    endLabel: entityMap.get(puzzle.endId)?.label ?? puzzle.endId,
-    pathLabels,
-    category: categoryName,
-  })
-
-  const { data, error } = await supabase.from('puzzles').upsert({
-    category_id: categoryId,
-    date,
-    start_concept: capitalize(entityMap.get(puzzle.startId)?.label ?? puzzle.startId),
-    end_concept: capitalize(entityMap.get(puzzle.endId)?.label ?? puzzle.endId),
-    bubbles: puzzle.bubbles,
-    connections: puzzle.connections,
-    optimal_path: puzzle.optimalPath,
-    difficulty: puzzle.difficulty,
-    narrative,
-    status: 'published',
-  }, { onConflict: 'category_id,date' }).select('id').single()
-
-  if (error) {
-    console.error(`[${categoryName}] DB error:`, error.message)
-    return null
-  }
-
-  console.log(`[${categoryName}] ✓ Published puzzle ${data.id} for ${date}`)
-  return data.id
 }
 
 async function runPipeline(targetDate?: string) {
