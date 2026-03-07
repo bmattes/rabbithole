@@ -22,6 +22,16 @@ function localDateString() {
   return `${y}-${m}-${day}`
 }
 
+export function isInFreeArchive(puzzleDateStr: string): boolean {
+  const [y, m, d] = puzzleDateStr.split('-').map(Number)
+  const puzzleDate = new Date(y, m - 1, d) // local midnight — avoids UTC-shift from date-only ISO strings
+  const cutoff = new Date()
+  cutoff.setDate(cutoff.getDate() - 7)
+  // Compare date-only (zero out time component)
+  cutoff.setHours(0, 0, 0, 0)
+  return puzzleDate >= cutoff
+}
+
 export async function getTodaysPuzzle(categoryId: string): Promise<Puzzle | null> {
   const { data, error } = await supabase
     .from('puzzles')
