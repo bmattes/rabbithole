@@ -2,7 +2,8 @@ import * as dotenv from 'dotenv'
 dotenv.config()
 
 import { createClient } from '@supabase/supabase-js'
-import { fetchEntities, CategoryDomain } from './wikidata'
+import { CategoryDomain } from './wikidata'
+import { fetchEntitiesCached } from './entityCache'
 import { buildGraph } from './graphBuilder'
 import { composePuzzleForDifficulty, Difficulty } from './puzzleComposer'
 import { generateNarrative } from './narrativeGenerator'
@@ -22,7 +23,8 @@ async function generatePuzzleForCategory(
   date: string
 ) {
   console.log(`\n[${categoryName}] Fetching entities from Wikidata...`)
-  const entities = await fetchEntities(domain, 1500)
+  const forceRefresh = process.argv.includes('--refresh-cache')
+  const entities = await fetchEntitiesCached(domain, 1500, { forceRefresh })
   console.log(`[${categoryName}] Got ${entities.length} entities`)
 
   const graph = buildGraph(entities)
