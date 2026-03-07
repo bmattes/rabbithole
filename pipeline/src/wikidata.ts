@@ -2,7 +2,11 @@ import { Entity } from './graphBuilder'
 
 const WIKIDATA_ENDPOINT = 'https://query.wikidata.org/sparql'
 
-export type WikidataDomain = 'movies' | 'sport' | 'music' | 'science' | 'history'
+export type WikidataDomain =
+  | 'movies' | 'sport' | 'music' | 'science' | 'history'
+  | 'videogames' | 'art' | 'literature' | 'geography' | 'royals'
+  | 'tennis' | 'soccer' | 'tv' | 'philosophy' | 'military'
+
 export type CategoryDomain = WikidataDomain | 'mb_rock' | 'mb_hiphop' | 'mb_pop' | 'mb_rnb' | 'mb_country' | 'mb_electronic' | 'comicvine'
 
 // Sport uses multiple focused queries to avoid Wikidata timeouts
@@ -96,12 +100,247 @@ const MUSIC_TYPES: [string, string][] = [
   ['song', 'person'],    // song → performer
 ]
 
+// Video games: game → publisher, game → developer, game → series
+const VIDEOGAMES_SUBQUERIES = [
+  (limit: number) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  ?a wdt:P31 wd:Q7889; wdt:P123 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 10)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`,
+  (limit: number) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  ?a wdt:P31 wd:Q7889; wdt:P178 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 10)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`,
+  (limit: number) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  ?a wdt:P31 wd:Q7889; wdt:P179 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 10)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`,
+]
+const VIDEOGAMES_TYPES: [string, string][] = [
+  ['game', 'company'],  // game → publisher
+  ['game', 'company'],  // game → developer
+  ['game', 'series'],   // game → series
+]
+
+// Art: painter → movement, painter → institution, artwork → painter
+const ART_SUBQUERIES = [
+  (limit: number) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q1028181; wdt:P135 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 5)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`,
+  (limit: number) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q1028181; wdt:P108 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 5)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`,
+  (limit: number) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  ?a wdt:P31 wd:Q3305213; wdt:P170 ?b.
+  ?b wdt:P31 wd:Q5.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 10)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`,
+]
+const ART_TYPES: [string, string][] = [
+  ['person', 'movement'],  // painter → art movement
+  ['person', 'other'],     // painter → institution
+  ['artwork', 'person'],   // artwork → painter
+]
+
+// Literature: author → movement/genre, novel → author
+const LITERATURE_SUBQUERIES = [
+  (limit: number) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q36180; wdt:P135|wdt:P101 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 10)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`,
+  (limit: number) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  VALUES ?bookType { wd:Q7725634 wd:Q8261 wd:Q1667921 }
+  ?a wdt:P31 ?bookType; wdt:P50 ?b.
+  ?b wdt:P31 wd:Q5.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 15)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`,
+]
+const LITERATURE_TYPES: [string, string][] = [
+  ['person', 'other'],   // author → literary movement/genre
+  ['book', 'person'],    // novel → author
+]
+
+// Geography: country → continent, capital city → country (capitals only to avoid timeout)
+const GEOGRAPHY_SUBQUERIES = [
+  (limit: number) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  ?a wdt:P31 wd:Q6256; wdt:P30 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 20)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`,
+  (limit: number) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  ?b wdt:P31 wd:Q6256; wdt:P36 ?a.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 30)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`,
+]
+const GEOGRAPHY_TYPES: [string, string][] = [
+  ['country', 'continent'],  // country → continent
+  ['city', 'country'],       // capital city → country
+]
+
+// Royals: monarch → country (via P27 citizenship), monarch → noble house (P53)
+const ROYALS_SUBQUERIES = [
+  (limit: number) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P27 ?b.
+  ?b wdt:P31 wd:Q6256.
+  ?a wdt:P106 wd:Q116.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 20)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`,
+  (limit: number) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P53 ?b.
+  ?a wdt:P106 wd:Q116.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 20)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`,
+]
+const ROYALS_TYPES: [string, string][] = [
+  ['person', 'country'],  // monarch → country
+  ['person', 'dynasty'],  // monarch → noble house
+]
+
+// Tennis: player → country, player → tournament wins (via award)
+const TENNIS_SUBQUERIES = [
+  (limit: number) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q10833314; wdt:P27 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 15)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`,
+  (limit: number) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q10833314; wdt:P54 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 15)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`,
+]
+const TENNIS_TYPES: [string, string][] = [
+  ['person', 'country'],  // player → country
+  ['person', 'team'],     // player → team/federation
+]
+
+// Soccer: footballer → club (high sitelinks to stay fast), club → league
+const SOCCER_SUBQUERIES = [
+  (limit: number) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q937857; wdt:P54 ?b.
+  ?b wdt:P31 wd:Q476028.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 50)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`,
+  (limit: number) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  ?a wdt:P31 wd:Q476028; wdt:P641 wd:Q2736; wdt:P118 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 30)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`,
+]
+const SOCCER_TYPES: [string, string][] = [
+  ['person', 'team'],   // footballer → club
+  ['team', 'league'],   // club → league
+]
+
+// TV: show → creator, show → network, show → cast
+const TV_SUBQUERIES = [
+  (limit: number) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  ?a wdt:P31 wd:Q5398426; wdt:P57|wdt:P162 ?b.
+  ?b wdt:P31 wd:Q5.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 15)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`,
+  (limit: number) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  ?a wdt:P31 wd:Q5398426; wdt:P161 ?b.
+  ?b wdt:P31 wd:Q5.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 15)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`,
+]
+const TV_TYPES: [string, string][] = [
+  ['show', 'person'],   // show → creator/director
+  ['show', 'person'],   // show → cast member
+]
+
+// Philosophy: philosopher → school of thought, philosopher → influenced by
+const PHILOSOPHY_SUBQUERIES = [
+  (limit: number) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q4964182; wdt:P101 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 10)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`,
+  (limit: number) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q4964182; wdt:P737 ?b.
+  ?b wdt:P31 wd:Q5; wdt:P106 wd:Q4964182.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 20)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`,
+]
+const PHILOSOPHY_TYPES: [string, string][] = [
+  ['person', 'other'],   // philosopher → field/school
+  ['person', 'person'],  // philosopher → influenced by
+]
+
+// Military: commander → conflict, commander → country
+const MILITARY_SUBQUERIES = [
+  (limit: number) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q189290; wdt:P607 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 15)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`,
+  (limit: number) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q189290; wdt:P27 ?b.
+  ?b wdt:P31 wd:Q6256.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 15)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`,
+]
+const MILITARY_TYPES: [string, string][] = [
+  ['person', 'conflict'],  // commander → conflict/war
+  ['person', 'country'],   // commander → country
+]
+
 // Each domain query returns pairs of (primary entity, related entity)
 const DOMAIN_QUERIES: Record<WikidataDomain, (limit: number) => string> = {
   // placeholder — uses subqueries instead
   movies: (_limit) => '',
   sport: (_limit) => '',
   music: (_limit) => '',
+  videogames: (_limit) => '',
+  art: (_limit) => '',
+  literature: (_limit) => '',
+  geography: (_limit) => '',
+  royals: (_limit) => '',
+  tennis: (_limit) => '',
+  soccer: (_limit) => '',
+  tv: (_limit) => '',
+  philosophy: (_limit) => '',
+  military: (_limit) => '',
 
   // employer (P108) and field of work (P101) — "Scientist → Institution/Field → Scientist"
   // ?a is always a person, ?b is institution or field (both fine as bridges, only person as anchor)
@@ -219,20 +458,42 @@ const SINGLE_QUERY_TYPES: Partial<Record<WikidataDomain, [string, string]>> = {
 
 export async function fetchEntities(domain: WikidataDomain, limit = 300): Promise<Entity[]> {
   const subqueries =
-    domain === 'movies' ? MOVIES_SUBQUERIES :
-    domain === 'sport'  ? SPORT_SUBQUERIES  :
-    domain === 'music'  ? MUSIC_SUBQUERIES  : null
+    domain === 'movies'     ? MOVIES_SUBQUERIES     :
+    domain === 'sport'      ? SPORT_SUBQUERIES      :
+    domain === 'music'      ? MUSIC_SUBQUERIES      :
+    domain === 'videogames' ? VIDEOGAMES_SUBQUERIES :
+    domain === 'art'        ? ART_SUBQUERIES        :
+    domain === 'literature' ? LITERATURE_SUBQUERIES :
+    domain === 'geography'  ? GEOGRAPHY_SUBQUERIES  :
+    domain === 'royals'     ? ROYALS_SUBQUERIES     :
+    domain === 'tennis'     ? TENNIS_SUBQUERIES     :
+    domain === 'soccer'     ? SOCCER_SUBQUERIES     :
+    domain === 'tv'         ? TV_SUBQUERIES         :
+    domain === 'philosophy' ? PHILOSOPHY_SUBQUERIES :
+    domain === 'military'   ? MILITARY_SUBQUERIES   : null
   const typeHints =
-    domain === 'movies' ? MOVIES_TYPES :
-    domain === 'sport'  ? SPORT_TYPES  :
-    domain === 'music'  ? MUSIC_TYPES  : null
+    domain === 'movies'     ? MOVIES_TYPES     :
+    domain === 'sport'      ? SPORT_TYPES      :
+    domain === 'music'      ? MUSIC_TYPES      :
+    domain === 'videogames' ? VIDEOGAMES_TYPES :
+    domain === 'art'        ? ART_TYPES        :
+    domain === 'literature' ? LITERATURE_TYPES :
+    domain === 'geography'  ? GEOGRAPHY_TYPES  :
+    domain === 'royals'     ? ROYALS_TYPES     :
+    domain === 'tennis'     ? TENNIS_TYPES     :
+    domain === 'soccer'     ? SOCCER_TYPES     :
+    domain === 'tv'         ? TV_TYPES         :
+    domain === 'philosophy' ? PHILOSOPHY_TYPES :
+    domain === 'military'   ? MILITARY_TYPES   : null
 
   if (subqueries && typeHints) {
     const perQuery = Math.ceil(limit / subqueries.length)
+    console.log(`  [${domain}] fetching ${subqueries.length} subqueries in parallel (limit ${perQuery} each)...`)
+    const results = await Promise.all(
+      subqueries.map((q, i) => runSparqlQuery(q(perQuery)).then(bindings => ({ bindings, i })))
+    )
     const entityMap = new Map<string, Entity>()
-    for (let i = 0; i < subqueries.length; i++) {
-      console.log(`  [${domain}] fetching subquery ${i + 1}/${subqueries.length} (limit ${perQuery})...`)
-      const bindings = await runSparqlQuery(subqueries[i](perQuery))
+    for (const { bindings, i } of results) {
       bindingsToEntityMap(bindings, entityMap, typeHints[i][0], typeHints[i][1])
     }
     return Array.from(entityMap.values())
