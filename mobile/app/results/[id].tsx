@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { View, Text, ScrollView, StyleSheet, Pressable } from 'react-native'
+import { View, Text, ScrollView, StyleSheet, Pressable, Share } from 'react-native'
 import { useLocalSearchParams, router } from 'expo-router'
 import { colors } from '../../lib/theme'
-import { awardXP, localDateString } from '../../lib/api'
+import { awardXP, getPathStats, localDateString } from '../../lib/api'
 import { computeRunXP } from '../../lib/progression'
 import { useAuth } from '../../hooks/useAuth'
 
@@ -68,6 +68,7 @@ export default function ResultsScreen() {
   const { userId } = useAuth()
   const xpAwarded = useRef(false)
   const [earnedXP, setEarnedXP] = useState(0)
+  const [pathStats, setPathStats] = useState<{ totalPlayers: number; optimalPathPct: number; sameHopsPct: number } | null>(null)
 
   const totalMs = parseInt(timeMs ?? '0')
   const minutes = Math.floor(totalMs / 60000)
@@ -104,6 +105,34 @@ export default function ResultsScreen() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // intentionally run once on mount
+
+  useEffect(() => {
+    if (!puzzleId || hopsNum === 0) return
+    getPathStats(puzzleId, hopsNum).then(setPathStats)
+  }, [puzzleId, hopsNum])
+
+  const DIFFICULTY_EMOJI: Record<string, string> = { easy: '🟢', medium: '🟡', hard: '🔴' }
+  const diffEmoji = DIFFICULTY_EMOJI[(difficulty as string) ?? 'easy'] ?? '🟢'
+
+  async function handleShare() {
+    const hopDots = Array.from({ length: hopsNum + 1 }, (_, i) => {
+      if (i === 0 || i === hopsNum) return '🐇'
+      return samePathAsOptimal ? '🟣' : '⚪'
+    }).join('')
+
+    const lines = [
+      `RabbitHole 🐇`,
+      `${diffEmoji} ${hopsNum} hop${hopsNum !== 1 ? 's' : ''} (optimal: ${optimalHopsNum})`,
+      hopDots,
+      `${playerLabels[0]} → ${playerLabels[playerLabels.length - 1]}`,
+    ]
+    if (pathStats && pathStats.totalPlayers >= 2) {
+      lines.push(`${pathStats.optimalPathPct}% of players found optimal`)
+    }
+    lines.push(`\nrabbitholeapp.com`)
+
+    await Share.share({ message: lines.join('\n') })
+  }
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -160,6 +189,24 @@ export default function ResultsScreen() {
         )}
       </View>
 
+      {pathStats && pathStats.totalPlayers >= 2 && (
+        <View style={styles.statsCard}>
+          <Text style={styles.statsCardTitle}>How others played</Text>
+          <View style={styles.statsCardRow}>
+            <View style={styles.statsCardItem}>
+              <Text style={styles.statsCardBig}>{pathStats.optimalPathPct}%</Text>
+              <Text style={styles.statsCardDesc}>found the optimal path</Text>
+            </View>
+            <View style={styles.statsCardDivider} />
+            <View style={styles.statsCardItem}>
+              <Text style={styles.statsCardBig}>{pathStats.sameHopsPct}%</Text>
+              <Text style={styles.statsCardDesc}>took {hopsNum} hop{hopsNum !== 1 ? 's' : ''} like you</Text>
+            </View>
+          </View>
+          <Text style={styles.statsCardFooter}>{pathStats.totalPlayers} player{pathStats.totalPlayers !== 1 ? 's' : ''} completed this puzzle</Text>
+        </View>
+      )}
+
       {/* AI narrative */}
       <View style={styles.narrativeCard}>
         <Text style={styles.narrativeTitle}>The RabbitHole</Text>
@@ -175,6 +222,9 @@ export default function ResultsScreen() {
         )}
       </View>
 
+      <Pressable style={styles.shareButton} onPress={handleShare}>
+        <Text style={styles.shareButtonText}>Share Result</Text>
+      </Pressable>
       <Pressable style={styles.button} onPress={() => router.replace('/')}>
         <Text style={styles.buttonText}>Back to Today</Text>
       </Pressable>
@@ -264,4 +314,31 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   xpText: { color: colors.accent, fontSize: 16, fontWeight: '700' },
+  statsCard: {
+    backgroundColor: colors.bgCard,
+    borderRadius: 20,
+    padding: 20,
+    width: '100%',
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  statsCardTitle: { color: colors.textTertiary, fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 16 },
+  statsCardRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  statsCardItem: { flex: 1, alignItems: 'center' },
+  statsCardBig: { color: colors.textPrimary, fontSize: 28, fontWeight: '800' },
+  statsCardDesc: { color: colors.textSecondary, fontSize: 12, marginTop: 2, textAlign: 'center' },
+  statsCardDivider: { width: 1, height: 40, backgroundColor: colors.border },
+  statsCardFooter: { color: colors.textTertiary, fontSize: 12, textAlign: 'center' },
+  shareButton: {
+    backgroundColor: colors.bgCard,
+    borderRadius: 14,
+    paddingVertical: 16,
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  shareButtonText: { color: colors.textPrimary, fontSize: 16, fontWeight: '700' },
 })
