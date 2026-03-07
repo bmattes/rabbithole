@@ -1,6 +1,9 @@
-import React from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { View, Text, ScrollView, StyleSheet, Pressable } from 'react-native'
 import { useLocalSearchParams, router } from 'expo-router'
+import { awardXP } from '../../lib/api'
+import { computeRunXP } from '../../lib/progression'
+import { useAuth } from '../../hooks/useAuth'
 
 function BoldTermsText({ text, terms, style }: { text: string; terms: string[]; style: object }) {
   const escaped = terms.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
@@ -60,6 +63,10 @@ export default function ResultsScreen() {
       narrative: string
     }>()
 
+  const { userId } = useAuth()
+  const xpAwarded = useRef(false)
+  const [earnedXP, setEarnedXP] = useState(0)
+
   const totalMs = parseInt(timeMs ?? '0')
   const minutes = Math.floor(totalMs / 60000)
   const seconds = String(Math.floor((totalMs % 60000) / 1000)).padStart(2, '0')
@@ -74,6 +81,28 @@ export default function ResultsScreen() {
   const samePathAsOptimal = playerLabels.join('|') === optimalLabels.join('|')
   const grade = beatOptimal ? 'Genius' : samePathAsOptimal ? 'Perfect' : scoreNum >= 700 ? 'Great' : scoreNum >= 500 ? 'Good' : 'Keep trying'
 
+  useEffect(() => {
+    if (xpAwarded.current) return
+    xpAwarded.current = true
+    const xp = computeRunXP({
+      difficulty: 'easy', // stub — puzzle difficulty not passed via params yet
+      isOptimalPath: samePathAsOptimal,
+      timeMs: totalMs,
+      streakDay: 1, // stub — will be wired to real streak in a future task
+    })
+    setEarnedXP(xp)
+    if (userId) {
+      awardXP({
+        userId,
+        xp,
+        playedDate: new Date().toISOString().split('T')[0],
+      }).then(({ totalXP, newStreak }) => {
+        console.log('[Results] XP awarded:', xp, 'total:', totalXP, 'streak:', newStreak)
+      })
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // intentionally run once on mount
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.title}>RabbitHole</Text>
@@ -82,6 +111,11 @@ export default function ResultsScreen() {
         <Text style={styles.grade}>{grade}</Text>
         <Text style={styles.scoreValue}>{scoreNum}</Text>
         <Text style={styles.scoreLabel}>points</Text>
+        {earnedXP > 0 && (
+          <View style={styles.xpBadge}>
+            <Text style={styles.xpText}>+{earnedXP} XP</Text>
+          </View>
+        )}
         <View style={styles.statsRow}>
           <View style={styles.stat}>
             <Text style={styles.statValue}>{minutes}:{seconds}</Text>
@@ -194,4 +228,15 @@ const styles = StyleSheet.create({
   buttonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   buttonSecondary: { paddingVertical: 12 },
   buttonSecondaryText: { color: '#555', fontSize: 15 },
+  xpBadge: {
+    backgroundColor: '#7c3aed22',
+    borderColor: '#7c3aed66',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    alignSelf: 'center',
+    marginTop: 8,
+  },
+  xpText: { color: '#7c3aed', fontSize: 16, fontWeight: '700' },
 })
