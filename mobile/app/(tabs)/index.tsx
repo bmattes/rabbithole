@@ -48,6 +48,7 @@ export default function TodayScreen() {
 
   const loadCategories = useCallback(() => {
     if (loading) return
+    if (!userId) { setCategoriesLoading(false); return }
     setCategoriesLoading(true)
     getCategories(userId).then(data => {
       setAllCategories(data as Category[])
