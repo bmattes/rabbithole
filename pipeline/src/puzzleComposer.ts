@@ -50,7 +50,21 @@ function countShortestPaths(startId: string, endId: string, graph: Graph, optima
   return count
 }
 
-function computeDifficulty(optimalPath: string[], pathCount: number, entityMap: Map<string, Entity>): Difficulty {
+interface CompositionParams {
+  /** Minimum optimal path length (nodes, not hops). Default 5 (= 4 hops). */
+  minPathLength: number
+  /** Familiarity score below which intermediates are considered "obscure". Default 60. */
+  obscureThreshold: number
+}
+
+const DEFAULT_PARAMS: CompositionParams = { minPathLength: 5, obscureThreshold: 60 }
+
+function computeDifficulty(
+  optimalPath: string[],
+  pathCount: number,
+  entityMap: Map<string, Entity>,
+  params: CompositionParams = DEFAULT_PARAMS,
+): Difficulty {
   const hops = optimalPath.length - 1
 
   // Average familiarity of intermediate nodes (exclude start/end)
@@ -68,9 +82,9 @@ function computeDifficulty(optimalPath: string[], pathCount: number, entityMap: 
     ? familiarityValues.reduce((a, b) => a + b, 0) / familiarityValues.length
     : 0
 
-  // familiarity: high (>150 normalized) = well-known, low (<60) = obscure
+  // familiarity: high (>150 normalized) = well-known, low (<obscureThreshold) = obscure
   const familiar = avgFamiliarity > 150
-  const obscure = avgFamiliarity < 60 || avgFamiliarity === 0
+  const obscure = avgFamiliarity < params.obscureThreshold || avgFamiliarity === 0
 
   // Hard: long path OR obscure intermediates with few routes
   if (hops >= 6) return 'hard'
@@ -79,6 +93,8 @@ function computeDifficulty(optimalPath: string[], pathCount: number, entityMap: 
   // 4-hop puzzles: easy if intermediates are reasonably well-known
   if (hops === 4 && familiar) return 'easy'
   if (hops === 4 && !obscure) return 'easy'
+  // 3-hop puzzles: always easy (only reachable when minPathLength is relaxed to 4)
+  if (hops === 3) return 'easy'
   return 'medium'
 }
 
@@ -113,16 +129,18 @@ export function composePuzzle({
   startId,
   endId,
   targetBubbleCount = 12,
+  params = DEFAULT_PARAMS,
 }: {
   entities: Entity[]
   graph: Graph
   startId: string
   endId: string
   targetBubbleCount?: number
+  params?: CompositionParams
 }): ComposedPuzzle | null {
   const optimalPath = findShortestPath(startId, endId, graph)
   if (!optimalPath) return null
-  if (optimalPath.length < 5 || optimalPath.length > 8) return null
+  if (optimalPath.length < params.minPathLength || optimalPath.length > 8) return null
 
   const entityMap = new Map(entities.map(e => [e.id, e]))
 
@@ -137,7 +155,15 @@ export function composePuzzle({
   candidateIds.add(optimalPath[0])
   candidateIds.add(optimalPath[optimalPath.length - 1])
 
-  for (const id of optimalPath) {
+  // When the path is short (3 hops), skip adding neighbors of start/end to the
+  // bubble set — they can create shortcuts that collapse the trimmed path below minimum.
+  const hopsRaw = optimalPath.length - 1
+  const noExpandEndpoints = hopsRaw <= 3
+  const expandIds = noExpandEndpoints
+    ? optimalPath.slice(1, -1)   // intermediates only
+    : optimalPath
+
+  for (const id of expandIds) {
     const neighbors = shuffle(graph[id] ?? [])
     for (const n of neighbors.slice(0, 4)) {
       if (hasGoodLabel(n)) candidateIds.add(n)
@@ -178,18 +204,52 @@ export function composePuzzle({
   const trueOptimalPath = findShortestPath(startId, endId, trimmedGraph) ?? optimalPath
 
   // Reject if the true optimal in the trimmed graph is shorter than our minimum
-  if (trueOptimalPath.length < 5) return null
+  if (trueOptimalPath.length < params.minPathLength) return null
 
   const pathCount = countShortestPaths(startId, endId, trimmedGraph, trueOptimalPath.length)
-  const difficulty = computeDifficulty(trueOptimalPath, pathCount, entityMap)
+  const difficulty = computeDifficulty(trueOptimalPath, pathCount, entityMap, params)
 
   return { startId, endId, bubbles, connections, optimalPath: trueOptimalPath, difficulty }
 }
 
+// Hop range (inclusive) that can plausibly produce each difficulty after trimming.
+const DIFFICULTY_HOP_RANGE: Record<Difficulty, [number, number]> = {
+  easy:   [3, 5],
+  medium: [4, 6],
+  hard:   [5, 8],
+}
+
+/**
+ * Build a pool of start/end pairs whose raw graph distance falls within [minHops, maxHops].
+ * Samples up to `sampleBudget` random pairs to find `targetSize` qualifying pairs.
+ */
+function buildPairPool(
+  entityIds: string[],
+  graph: Graph,
+  minHops: number,
+  maxHops: number,
+  targetSize: number,
+  sampleBudget: number,
+): Array<[string, string]> {
+  const pool: Array<[string, string]> = []
+  for (let i = 0; i < sampleBudget && pool.length < targetSize; i++) {
+    const startId = entityIds[Math.floor(Math.random() * entityIds.length)]
+    const endId = entityIds[Math.floor(Math.random() * entityIds.length)]
+    if (startId === endId) continue
+    const path = findShortestPath(startId, endId, graph)
+    if (!path) continue
+    const hops = path.length - 1
+    if (hops >= minHops && hops <= maxHops) pool.push([startId, endId])
+  }
+  return pool
+}
+
 /**
  * Attempt to compose a puzzle that matches the target difficulty.
- * Retries up to maxAttempts times, picking random start/end pairs each time.
- * Returns the first puzzle that matches, or null if none found.
+ * Uses an adaptive retry ladder: if early rounds fail, progressively relaxes
+ * composition constraints before giving up.
+ * Each round pre-filters start/end pairs by raw hop distance so we don't waste
+ * attempts on pairs that can never produce the target difficulty.
  */
 export function composePuzzleForDifficulty({
   entities,
@@ -197,23 +257,47 @@ export function composePuzzleForDifficulty({
   entityIds,
   targetDifficulty,
   targetBubbleCount = 12,
-  maxAttempts = 150,
 }: {
   entities: Entity[]
   graph: Graph
   entityIds: string[]
   targetDifficulty: Difficulty
   targetBubbleCount?: number
-  maxAttempts?: number
 }): ComposedPuzzle | null {
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const startId = entityIds[Math.floor(Math.random() * entityIds.length)]
-    const endId = entityIds[Math.floor(Math.random() * entityIds.length)]
-    if (startId === endId) continue
+  // Retry ladder: each round tries with progressively relaxed params.
+  const rounds: Array<{ attempts: number; params: CompositionParams }> = [
+    // Round 1: strict defaults
+    { attempts: 50, params: { minPathLength: 5, obscureThreshold: 60 } },
+    // Round 2: relax obscure threshold — more 4-hop paths qualify as easy
+    { attempts: 50, params: { minPathLength: 5, obscureThreshold: 30 } },
+    // Round 3: also allow 3-hop paths — last resort for sparse graphs
+    { attempts: 75, params: { minPathLength: 4, obscureThreshold: 30 } },
+  ]
 
-    const puzzle = composePuzzle({ entities, graph, startId, endId, targetBubbleCount })
-    if (puzzle && puzzle.difficulty === targetDifficulty) {
-      return puzzle
+  const [minHops, maxHops] = DIFFICULTY_HOP_RANGE[targetDifficulty]
+
+  for (const round of rounds) {
+    const roundMinHops = Math.max(minHops, round.params.minPathLength - 1)
+    // Pre-build a pool of pairs in the right hop range — avoids wasting attempts
+    // on hub-dominated graphs where most pairs are too close together.
+    const pool = buildPairPool(entityIds, graph, roundMinHops, maxHops, round.attempts, round.attempts * 10)
+    const source = pool.length >= 10 ? pool : null  // fall back to random if pool too thin
+
+    for (let attempt = 0; attempt < round.attempts; attempt++) {
+      let startId: string, endId: string
+      if (source) {
+        const pair = source[Math.floor(Math.random() * source.length)]
+        ;[startId, endId] = pair
+      } else {
+        startId = entityIds[Math.floor(Math.random() * entityIds.length)]
+        endId = entityIds[Math.floor(Math.random() * entityIds.length)]
+        if (startId === endId) continue
+      }
+
+      const puzzle = composePuzzle({ entities, graph, startId, endId, targetBubbleCount, params: round.params })
+      if (puzzle && puzzle.difficulty === targetDifficulty) {
+        return puzzle
+      }
     }
   }
   return null

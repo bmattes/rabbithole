@@ -18,13 +18,13 @@ export const CATEGORY_EMOJIS: Record<string, string> = {
   mythology: '⚡',
   space: '🚀',
   food: '🍕',
+  comics: '🦸',
+  basketball: '🏀',
+  americanfootball: '🏈',
   // MusicBrainz domains
   mb_rock: '🎸',
   mb_hiphop: '🎤',
   mb_pop: '🌟',
   mb_rnb: '🎷',
   mb_country: '🤠',
-  mb_electronic: '🎧',
-  // Comic Vine
-  comicvine: '🦸',
 }

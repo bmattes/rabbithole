@@ -6,9 +6,10 @@ export type WikidataDomain =
   | 'movies' | 'sport' | 'music' | 'science' | 'history'
   | 'videogames' | 'art' | 'literature' | 'geography' | 'royals'
   | 'tennis' | 'soccer' | 'tv' | 'philosophy' | 'military'
-  | 'mythology' | 'space' | 'food'
+  | 'mythology' | 'space' | 'food' | 'comics'
+  | 'basketball' | 'americanfootball'
 
-export type CategoryDomain = WikidataDomain | 'mb_rock' | 'mb_hiphop' | 'mb_pop' | 'mb_rnb' | 'mb_country' | 'mb_electronic' | 'comicvine'
+export type CategoryDomain = WikidataDomain | 'mb_rock' | 'mb_hiphop' | 'mb_pop' | 'mb_rnb' | 'mb_country'
 
 // Sport uses multiple focused queries to avoid Wikidata timeouts
 const SPORT_SUBQUERIES = [
@@ -326,28 +327,51 @@ const MILITARY_TYPES: [string, string][] = [
   ['person', 'country'],   // commander → country
 ]
 
-// Mythology: deity → pantheon/group, deity → influenced (parent myth system)
+// Mythology: deities, heroes, creatures, artifacts — multiple relation types for rich graph
+// Types: Q22989102=mythological figure, Q4271324=mythological character, Q178885=deity,
+//        Q12195757=legendary creature, Q4936492=heroic figure
 const MYTHOLOGY_SUBQUERIES = [
-  // Deity/figure → group they belong to (Twelve Olympians, Aesir, etc.)
+  // Figure → pantheon/group (Twelve Olympians, Aesir, Vanir, etc.)
   (limit: number) => `
 SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
-  VALUES ?type { wd:Q22989102 wd:Q4271324 wd:Q178885 wd:Q12195757 }
+  VALUES ?type { wd:Q22989102 wd:Q4271324 wd:Q178885 wd:Q12195757 wd:Q4936492 }
   ?a wdt:P31 ?type; wdt:P361 ?b.
-  ?a wikibase:sitelinks ?links. FILTER(?links > 10)
+  ?a wikibase:sitelinks ?links. FILTER(?links > 5)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`,
-  // Deity → mythology system (Greek mythology, Norse mythology, etc.)
+  // Figure → mythology system (Greek, Norse, Egyptian, Celtic, etc.)
   (limit: number) => `
 SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
   VALUES ?type { wd:Q22989102 wd:Q4271324 wd:Q178885 wd:Q12195757 wd:Q4936492 }
   ?a wdt:P31 ?type; wdt:P1080 ?b.
-  ?a wikibase:sitelinks ?links. FILTER(?links > 5)
+  ?a wikibase:sitelinks ?links. FILTER(?links > 3)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`,
+  // Figure → parent (father/mother) — creates dense family trees
+  (limit: number) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  VALUES ?type { wd:Q22989102 wd:Q4271324 wd:Q178885 wd:Q12195757 wd:Q4936492 }
+  ?a wdt:P31 ?type.
+  { ?a wdt:P22 ?b. } UNION { ?a wdt:P25 ?b. }
+  ?b wdt:P31 ?type.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 3)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`,
+  // Figure → consort/spouse
+  (limit: number) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  VALUES ?type { wd:Q22989102 wd:Q4271324 wd:Q178885 wd:Q12195757 wd:Q4936492 }
+  ?a wdt:P31 ?type; wdt:P26 ?b.
+  ?b wdt:P31 ?type.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 3)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`,
 ]
 const MYTHOLOGY_TYPES: [string, string][] = [
-  ['deity', 'group'],    // deity → pantheon group
-  ['deity', 'other'],    // deity → divine domain/attribute
+  ['deity', 'group'],   // figure → pantheon
+  ['deity', 'other'],   // figure → mythology system
+  ['deity', 'deity'],   // figure → parent
+  ['deity', 'deity'],   // figure → consort
 ]
 
 // Space: astronaut → country, astronaut → space program
@@ -393,6 +417,97 @@ const FOOD_TYPES: [string, string][] = [
   ['dish', 'category'],   // dish → food category (pasta, soup, etc.)
 ]
 
+// Comics: character → publisher, character → team (using Wikidata comic character items)
+const COMICS_SUBQUERIES = [
+  // Comic character → publisher
+  (limit: number) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  ?a wdt:P31 wd:Q1114461; wdt:P123 ?b.
+  ?b wdt:P31 wd:Q2085381.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 5)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`,
+  // Comic character → team affiliation
+  (limit: number) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  ?a wdt:P31 wd:Q1114461; wdt:P463 ?b.
+  ?b wdt:P31 wd:Q14514600.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 5)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`,
+  // Comic character → creator
+  (limit: number) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  ?a wdt:P31 wd:Q1114461; wdt:P170 ?b.
+  ?b wdt:P31 wd:Q5.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 8)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`,
+]
+const COMICS_TYPES: [string, string][] = [
+  ['character', 'publisher'],  // character → publisher
+  ['character', 'team'],       // character → team
+  ['character', 'person'],     // character → creator
+]
+
+// Basketball: NBA players → teams, teams → NBA league
+// Q3409032 = basketball player, Q13393265 = NBA franchise, Q155223 = NBA
+const BASKETBALL_SUBQUERIES = [
+  // NBA player → team (any team they played for that is an NBA franchise)
+  (limit: number) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q3409032; wdt:P54 ?b.
+  ?b wdt:P31 wd:Q13393265.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 20)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`,
+  // NBA player → team (using sport = basketball as broader net)
+  (limit: number) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q3409032; wdt:P54 ?b.
+  ?b wdt:P641 wd:Q5372.
+  ?b wdt:P118 wd:Q155223.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 15)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`,
+  // NBA team → NBA league
+  (limit: number) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  { ?a wdt:P31 wd:Q13393265. } UNION { ?a wdt:P118 wd:Q155223; wdt:P641 wd:Q5372. }
+  ?a wdt:P118 ?b. ?b wdt:P31 wd:Q623109.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 5)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`,
+]
+const BASKETBALL_TYPES: [string, string][] = [
+  ['person', 'team'],   // player → NBA franchise
+  ['person', 'team'],   // player → NBA team (broader)
+  ['team', 'league'],   // team → league
+]
+
+// American Football: player → team, team → league
+const AMERICANFOOTBALL_SUBQUERIES = [
+  // NFL player → team they played for
+  (limit: number) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q19204627; wdt:P54 ?b.
+  ?b wdt:P31 wd:Q17156793.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 20)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`,
+  // NFL team → league
+  (limit: number) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  ?a wdt:P31 wd:Q17156793; wdt:P118 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 10)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`,
+]
+const AMERICANFOOTBALL_TYPES: [string, string][] = [
+  ['person', 'team'],   // player → team
+  ['team', 'league'],   // team → league
+]
+
 // Each domain query returns pairs of (primary entity, related entity)
 const DOMAIN_QUERIES: Record<WikidataDomain, (limit: number) => string> = {
   // placeholder — uses subqueries instead
@@ -412,6 +527,9 @@ const DOMAIN_QUERIES: Record<WikidataDomain, (limit: number) => string> = {
   mythology: (_limit) => '',
   space: (_limit) => '',
   food: (_limit) => '',
+  comics: (_limit) => '',
+  basketball: (_limit) => '',
+  americanfootball: (_limit) => '',
 
   // employer (P108) and field of work (P101) — "Scientist → Institution/Field → Scientist"
   // ?a is always a person, ?b is institution or field (both fine as bridges, only person as anchor)
@@ -544,7 +662,10 @@ export async function fetchEntities(domain: WikidataDomain, limit = 300): Promis
     domain === 'military'   ? MILITARY_SUBQUERIES   :
     domain === 'mythology'  ? MYTHOLOGY_SUBQUERIES  :
     domain === 'space'      ? SPACE_SUBQUERIES      :
-    domain === 'food'       ? FOOD_SUBQUERIES       : null
+    domain === 'food'       ? FOOD_SUBQUERIES        :
+    domain === 'comics'          ? COMICS_SUBQUERIES          :
+    domain === 'basketball'      ? BASKETBALL_SUBQUERIES      :
+    domain === 'americanfootball'? AMERICANFOOTBALL_SUBQUERIES: null
   const typeHints =
     domain === 'movies'     ? MOVIES_TYPES     :
     domain === 'sport'      ? SPORT_TYPES      :
@@ -561,7 +682,10 @@ export async function fetchEntities(domain: WikidataDomain, limit = 300): Promis
     domain === 'military'   ? MILITARY_TYPES   :
     domain === 'mythology'  ? MYTHOLOGY_TYPES  :
     domain === 'space'      ? SPACE_TYPES      :
-    domain === 'food'       ? FOOD_TYPES       : null
+    domain === 'food'       ? FOOD_TYPES        :
+    domain === 'comics'          ? COMICS_TYPES          :
+    domain === 'basketball'      ? BASKETBALL_TYPES      :
+    domain === 'americanfootball'? AMERICANFOOTBALL_TYPES: null
 
   if (subqueries && typeHints) {
     const perQuery = Math.ceil(limit / subqueries.length)

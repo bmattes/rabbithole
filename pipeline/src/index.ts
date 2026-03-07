@@ -16,41 +16,41 @@ const supabase = createClient(
 
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
-async function generatePuzzleForCategory(
-  categoryId: string,
-  categoryName: string,
-  domain: CategoryDomain,
-  date: string
-) {
-  console.log(`\n[${categoryName}] Fetching entities from Wikidata...`)
-  const forceRefresh = process.argv.includes('--refresh-cache')
-  const entities = await fetchEntitiesCached(domain, 1500, { forceRefresh })
-  console.log(`[${categoryName}] Got ${entities.length} entities`)
+const ANCHOR_TYPES: Record<string, string[]> = {
+  movies: ['film'],
+  sport: ['person', 'team', 'city'],
+  music: ['person', 'song'],
+  science: ['person'],
+  history: ['person'],
+  basketball: ['person', 'team'],
+  americanfootball: ['person', 'team'],
+}
 
-  const graph = buildGraph(entities)
-
-  const ANCHOR_TYPES: Record<string, string[]> = {
-    movies: ['film'],
-    sport: ['person', 'team', 'city'],
-    music: ['person', 'song'],
-    science: ['person'],
-    history: ['person'],
-  }
+function buildEntityIds(entities: ReturnType<typeof buildGraph> extends infer G ? any[] : any[], domain: CategoryDomain): string[] {
   const anchorTypes = ANCHOR_TYPES[domain] ?? null
-
-  const entityIds = entities
-    .filter(e => {
+  return entities
+    .filter((e: any) => {
       if (e.relatedIds.length < 2) return false
       if (e.label.length > 30) return false
       if (anchorTypes && e.entityType && !anchorTypes.includes(e.entityType)) return false
       return true
     })
-    .map(e => e.id)
+    .map((e: any) => e.id)
+}
 
-  const difficulties: Difficulty[] = ['easy', 'medium', 'hard']
+async function attemptDifficulties(
+  difficulties: Difficulty[],
+  entities: Awaited<ReturnType<typeof fetchEntitiesCached>>,
+  domain: CategoryDomain,
+  categoryId: string,
+  categoryName: string,
+  date: string,
+): Promise<Difficulty[]> {
+  const graph = buildGraph(entities)
+  const entityIds = buildEntityIds(entities, domain)
+  const failed: Difficulty[] = []
 
   for (const difficulty of difficulties) {
-    // Skip if already published for this date + difficulty
     const { data: existing } = await supabase
       .from('puzzles')
       .select('id')
@@ -66,16 +66,10 @@ async function generatePuzzleForCategory(
     }
 
     console.log(`[${categoryName}/${difficulty}] Composing puzzle...`)
-    const puzzle = composePuzzleForDifficulty({
-      entities,
-      graph,
-      entityIds,
-      targetDifficulty: difficulty,
-      maxAttempts: 150,
-    })
+    const puzzle = composePuzzleForDifficulty({ entities, graph, entityIds, targetDifficulty: difficulty })
 
     if (!puzzle) {
-      console.error(`[${categoryName}/${difficulty}] Failed to compose puzzle after 150 attempts`)
+      failed.push(difficulty)
       continue
     }
 
@@ -110,6 +104,35 @@ async function generatePuzzleForCategory(
     }
 
     console.log(`[${categoryName}/${difficulty}] ✓ Published puzzle ${data.id}`)
+  }
+
+  return failed
+}
+
+async function generatePuzzleForCategory(
+  categoryId: string,
+  categoryName: string,
+  domain: CategoryDomain,
+  date: string
+) {
+  console.log(`\n[${categoryName}] Fetching entities...`)
+  const forceRefresh = process.argv.includes('--refresh-cache')
+  const entities = await fetchEntitiesCached(domain, undefined, { forceRefresh })
+  console.log(`[${categoryName}] Got ${entities.length} entities`)
+
+  const allDifficulties: Difficulty[] = ['easy', 'medium', 'hard']
+  const failed = await attemptDifficulties(allDifficulties, entities, domain, categoryId, categoryName, date)
+
+  if (failed.length === 0) return
+
+  // Some difficulties failed — re-fetch with a larger dataset and retry
+  console.log(`[${categoryName}] ${failed.join(', ')} failed — enriching dataset and retrying...`)
+  const enrichedEntities = await fetchEntitiesCached(domain, 3000, { forceRefresh: true })
+  console.log(`[${categoryName}] Enriched: ${enrichedEntities.length} entities`)
+
+  const stillFailed = await attemptDifficulties(failed, enrichedEntities, domain, categoryId, categoryName, date)
+  for (const difficulty of stillFailed) {
+    console.error(`[${categoryName}/${difficulty}] Failed to compose puzzle after enrichment`)
   }
 }
 

@@ -8,7 +8,7 @@ const MB_HEADERS = {
 }
 
 // Genre tags to query per domain
-export type MusicBrainzDomain = 'mb_rock' | 'mb_hiphop' | 'mb_pop' | 'mb_rnb' | 'mb_country' | 'mb_electronic'
+export type MusicBrainzDomain = 'mb_rock' | 'mb_hiphop' | 'mb_pop' | 'mb_rnb' | 'mb_country'
 
 const DOMAIN_TAGS: Record<MusicBrainzDomain, string[]> = {
   mb_rock:       ['rock', 'classic rock', 'alternative rock', 'indie rock', 'hard rock', 'punk'],
@@ -16,7 +16,6 @@ const DOMAIN_TAGS: Record<MusicBrainzDomain, string[]> = {
   mb_pop:        ['pop', 'dance-pop', 'electropop', 'synth-pop', 'teen pop'],
   mb_rnb:        ['r&b', 'soul', 'rhythm and blues', 'neo soul', 'motown'],
   mb_country:    ['country', 'country pop', 'bluegrass', 'americana', 'outlaw country'],
-  mb_electronic: ['electronic', 'edm', 'house', 'techno', 'trance', 'drum and bass'],
 }
 
 const DELAY_MS = 1100 // MusicBrainz: 1 req/sec without auth
@@ -139,8 +138,17 @@ export async function fetchMusicBrainzEntities(
         if (!labelEntity.relatedIds.includes(artistId)) labelEntity.relatedIds.push(artistId)
       }
 
-      // Collaboration: artist ↔ artist (influenced by, supporting musician, etc.)
-      if (['supporting musician', 'instrumental supporting musician', 'involved with'].includes(rel.type) && rel.artist) {
+      // Collaboration: artist ↔ artist
+      // 'collaboration' and 'remixer'/'remixed by' are especially common in electronic music
+      const COLLAB_TYPES = [
+        'supporting musician',
+        'instrumental supporting musician',
+        'involved with',
+        'collaboration',
+        'remixer',
+        'remixed by',
+      ]
+      if (COLLAB_TYPES.includes(rel.type) && rel.artist) {
         const otherId = rel.artist.id
         const otherName = rel.artist.name
         if (!entityMap.has(otherId)) {
