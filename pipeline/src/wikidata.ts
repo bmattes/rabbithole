@@ -6,6 +6,7 @@ export type WikidataDomain =
   | 'movies' | 'sport' | 'music' | 'science' | 'history'
   | 'videogames' | 'art' | 'literature' | 'geography' | 'royals'
   | 'tennis' | 'soccer' | 'tv' | 'philosophy' | 'military'
+  | 'mythology' | 'space' | 'food'
 
 export type CategoryDomain = WikidataDomain | 'mb_rock' | 'mb_hiphop' | 'mb_pop' | 'mb_rnb' | 'mb_country' | 'mb_electronic' | 'comicvine'
 
@@ -325,6 +326,73 @@ const MILITARY_TYPES: [string, string][] = [
   ['person', 'country'],   // commander → country
 ]
 
+// Mythology: deity → pantheon/group, deity → influenced (parent myth system)
+const MYTHOLOGY_SUBQUERIES = [
+  // Deity/figure → group they belong to (Twelve Olympians, Aesir, etc.)
+  (limit: number) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  VALUES ?type { wd:Q22989102 wd:Q4271324 wd:Q178885 wd:Q12195757 }
+  ?a wdt:P31 ?type; wdt:P361 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 10)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`,
+  // Deity → mythology system (Greek mythology, Norse mythology, etc.)
+  (limit: number) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  VALUES ?type { wd:Q22989102 wd:Q4271324 wd:Q178885 wd:Q12195757 wd:Q4936492 }
+  ?a wdt:P31 ?type; wdt:P1080 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 5)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`,
+]
+const MYTHOLOGY_TYPES: [string, string][] = [
+  ['deity', 'group'],    // deity → pantheon group
+  ['deity', 'other'],    // deity → divine domain/attribute
+]
+
+// Space: astronaut → country, astronaut → space program
+const SPACE_SUBQUERIES = [
+  (limit: number) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q11631; wdt:P27 ?b.
+  ?b wdt:P31 wd:Q6256.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 10)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`,
+  // Astronaut → space agency they flew with
+  (limit: number) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q11631; wdt:P108 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 10)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`,
+]
+const SPACE_TYPES: [string, string][] = [
+  ['person', 'country'],   // astronaut → country
+  ['person', 'other'],     // astronaut → space agency
+]
+
+// Food: dish → country of origin, dish → food category
+const FOOD_SUBQUERIES = [
+  (limit: number) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  ?a wdt:P31 wd:Q746549; wdt:P495 ?b.
+  ?b wdt:P31 wd:Q6256.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 10)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`,
+  (limit: number) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  ?a wdt:P31 wd:Q746549; wdt:P279 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 10)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`,
+]
+const FOOD_TYPES: [string, string][] = [
+  ['dish', 'country'],    // dish → country of origin
+  ['dish', 'category'],   // dish → food category (pasta, soup, etc.)
+]
+
 // Each domain query returns pairs of (primary entity, related entity)
 const DOMAIN_QUERIES: Record<WikidataDomain, (limit: number) => string> = {
   // placeholder — uses subqueries instead
@@ -341,6 +409,9 @@ const DOMAIN_QUERIES: Record<WikidataDomain, (limit: number) => string> = {
   tv: (_limit) => '',
   philosophy: (_limit) => '',
   military: (_limit) => '',
+  mythology: (_limit) => '',
+  space: (_limit) => '',
+  food: (_limit) => '',
 
   // employer (P108) and field of work (P101) — "Scientist → Institution/Field → Scientist"
   // ?a is always a person, ?b is institution or field (both fine as bridges, only person as anchor)
@@ -470,7 +541,10 @@ export async function fetchEntities(domain: WikidataDomain, limit = 300): Promis
     domain === 'soccer'     ? SOCCER_SUBQUERIES     :
     domain === 'tv'         ? TV_SUBQUERIES         :
     domain === 'philosophy' ? PHILOSOPHY_SUBQUERIES :
-    domain === 'military'   ? MILITARY_SUBQUERIES   : null
+    domain === 'military'   ? MILITARY_SUBQUERIES   :
+    domain === 'mythology'  ? MYTHOLOGY_SUBQUERIES  :
+    domain === 'space'      ? SPACE_SUBQUERIES      :
+    domain === 'food'       ? FOOD_SUBQUERIES       : null
   const typeHints =
     domain === 'movies'     ? MOVIES_TYPES     :
     domain === 'sport'      ? SPORT_TYPES      :
@@ -484,7 +558,10 @@ export async function fetchEntities(domain: WikidataDomain, limit = 300): Promis
     domain === 'soccer'     ? SOCCER_TYPES     :
     domain === 'tv'         ? TV_TYPES         :
     domain === 'philosophy' ? PHILOSOPHY_TYPES :
-    domain === 'military'   ? MILITARY_TYPES   : null
+    domain === 'military'   ? MILITARY_TYPES   :
+    domain === 'mythology'  ? MYTHOLOGY_TYPES  :
+    domain === 'space'      ? SPACE_TYPES      :
+    domain === 'food'       ? FOOD_TYPES       : null
 
   if (subqueries && typeHints) {
     const perQuery = Math.ceil(limit / subqueries.length)
