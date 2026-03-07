@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { View, Text, ScrollView, StyleSheet, ActivityIndicator, TextInput, Pressable, KeyboardAvoidingView, Platform } from 'react-native'
+import { colors } from '../../lib/theme'
 import { useAuth } from '../../hooks/useAuth'
 import { useProgression } from '../../hooks/useProgression'
 import { getMyRuns, getDisplayName, updateDisplayName, getCategories, saveUnlockedCategory } from '../../lib/api'
@@ -92,7 +93,7 @@ export default function ProfileScreen() {
             value={displayName}
             onChangeText={setDisplayName}
             placeholder="Your name"
-            placeholderTextColor="#444"
+            placeholderTextColor={colors.textTertiary}
             maxLength={24}
             autoCorrect={false}
             returnKeyType="done"
@@ -125,7 +126,7 @@ export default function ProfileScreen() {
       <Text style={styles.title2}>My Stats</Text>
 
       {loading ? (
-        <ActivityIndicator color="#7c3aed" style={{ marginTop: 40 }} />
+        <ActivityIndicator color={colors.accent} style={{ marginTop: 40 }} />
       ) : totalRuns === 0 ? (
         <View style={styles.emptyContainer}>
           <Text style={styles.empty}>No runs yet</Text>
@@ -208,34 +209,34 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0a0a0a' },
+  container: { flex: 1, backgroundColor: colors.bg },
   content: { paddingTop: 80, paddingHorizontal: 20, paddingBottom: 60 },
-  title: { color: '#7c3aed', fontSize: 28, fontWeight: '800', marginBottom: 20 },
-  title2: { color: '#fff', fontSize: 20, fontWeight: '700', marginBottom: 16, marginTop: 8 },
+  title: { color: colors.accent, fontSize: 28, fontWeight: '800', marginBottom: 20 },
+  title2: { color: colors.textPrimary, fontSize: 20, fontWeight: '700', marginBottom: 16, marginTop: 8 },
   nameCard: {
-    backgroundColor: '#1e1e2e',
+    backgroundColor: colors.bgCard,
     borderRadius: 16,
     padding: 16,
     marginBottom: 28,
     borderWidth: 1,
-    borderColor: '#2a2a3e',
+    borderColor: colors.border,
   },
-  nameLabel: { color: '#fff', fontSize: 14, fontWeight: '600', marginBottom: 2 },
-  nameHint: { color: '#555', fontSize: 12, marginBottom: 12 },
+  nameLabel: { color: colors.textPrimary, fontSize: 14, fontWeight: '600', marginBottom: 2 },
+  nameHint: { color: colors.textTertiary, fontSize: 12, marginBottom: 12 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   nameInput: {
     flex: 1,
-    backgroundColor: '#14141e',
+    backgroundColor: colors.bgInput,
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    color: '#fff',
+    color: colors.textPrimary,
     fontSize: 15,
     borderWidth: 1,
-    borderColor: '#2a2a3e',
+    borderColor: colors.border,
   },
   saveBtn: {
-    backgroundColor: '#7c3aed',
+    backgroundColor: colors.accent,
     borderRadius: 10,
     paddingHorizontal: 16,
     paddingVertical: 10,
@@ -243,57 +244,57 @@ const styles = StyleSheet.create({
   saveBtnDisabled: { opacity: 0.5 },
   saveBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
   emptyContainer: { marginTop: 60, alignItems: 'center' },
-  empty: { color: '#fff', fontSize: 16, fontWeight: '600', marginBottom: 6 },
-  emptySub: { color: '#555', fontSize: 13 },
+  empty: { color: colors.textPrimary, fontSize: 16, fontWeight: '600', marginBottom: 6 },
+  emptySub: { color: colors.textTertiary, fontSize: 13 },
   summaryRow: { flexDirection: 'row', gap: 12, marginBottom: 32 },
   summaryCard: {
     flex: 1,
-    backgroundColor: '#1e1e2e',
+    backgroundColor: colors.bgCard,
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#2a2a3e',
+    borderColor: colors.border,
   },
-  summaryVal: { color: '#7c3aed', fontSize: 24, fontWeight: '800' },
-  summaryLabel: { color: '#888', fontSize: 11, marginTop: 4 },
-  sectionHeader: { color: '#888', fontSize: 12, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12, marginTop: 4 },
+  summaryVal: { color: colors.accent, fontSize: 24, fontWeight: '800' },
+  summaryLabel: { color: colors.textSecondary, fontSize: 11, marginTop: 4 },
+  sectionHeader: { color: colors.textSecondary, fontSize: 12, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12, marginTop: 4 },
   catCard: {
-    backgroundColor: '#1e1e2e',
+    backgroundColor: colors.bgCard,
     borderRadius: 12,
     padding: 16,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: '#2a2a3e',
+    borderColor: colors.border,
   },
   catHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
   catEmoji: { fontSize: 18, marginRight: 10 },
-  catName: { flex: 1, color: '#fff', fontSize: 15, fontWeight: '600' },
-  catCount: { color: '#555', fontSize: 12 },
+  catName: { flex: 1, color: colors.textPrimary, fontSize: 15, fontWeight: '600' },
+  catCount: { color: colors.textTertiary, fontSize: 12 },
   catStats: { flexDirection: 'row', gap: 8 },
-  catStat: { flex: 1, alignItems: 'center', backgroundColor: '#14141e', borderRadius: 8, paddingVertical: 8 },
-  catStatVal: { color: '#a78bfa', fontSize: 18, fontWeight: '700' },
-  catStatLabel: { color: '#555', fontSize: 11, marginTop: 2 },
-  runRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#1e1e2e' },
+  catStat: { flex: 1, alignItems: 'center', backgroundColor: colors.bgInput, borderRadius: 8, paddingVertical: 8 },
+  catStatVal: { color: colors.accent, fontSize: 18, fontWeight: '700' },
+  catStatLabel: { color: colors.textTertiary, fontSize: 11, marginTop: 2 },
+  runRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
   runEmoji: { fontSize: 16, marginRight: 12 },
   runInfo: { flex: 1 },
-  runTitle: { color: '#fff', fontSize: 14, fontWeight: '600' },
-  runMeta: { color: '#555', fontSize: 12, marginTop: 2 },
-  runScore: { color: '#7c3aed', fontSize: 16, fontWeight: '700', marginLeft: 12 },
+  runTitle: { color: colors.textPrimary, fontSize: 14, fontWeight: '600' },
+  runMeta: { color: colors.textTertiary, fontSize: 12, marginTop: 2 },
+  runScore: { color: colors.accent, fontSize: 16, fontWeight: '700', marginLeft: 12 },
   levelCard: {
-    backgroundColor: '#1e1e2e',
+    backgroundColor: colors.bgCard,
     borderRadius: 16,
     padding: 20,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#2a2a3e',
+    borderColor: colors.border,
   },
   levelRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
-  levelNum: { color: '#fff', fontSize: 22, fontWeight: '800' },
-  levelTitle: { color: '#7c3aed', fontSize: 16, fontWeight: '600' },
+  levelNum: { color: colors.textPrimary, fontSize: 22, fontWeight: '800' },
+  levelTitle: { color: colors.accent, fontSize: 16, fontWeight: '600' },
   plusBadge: { color: '#f59e0b', fontSize: 16, fontWeight: '800', marginLeft: 4 },
-  xpBarBg: { height: 6, backgroundColor: '#2a2a3e', borderRadius: 3, marginBottom: 6 },
-  xpBarFill: { height: 6, backgroundColor: '#7c3aed', borderRadius: 3 },
-  xpLabel: { color: '#666', fontSize: 12 },
-  streakLabel: { color: '#888', fontSize: 13, marginTop: 6 },
+  xpBarBg: { height: 6, backgroundColor: colors.border, borderRadius: 3, marginBottom: 6 },
+  xpBarFill: { height: 6, backgroundColor: colors.accent, borderRadius: 3 },
+  xpLabel: { color: colors.textSecondary, fontSize: 12 },
+  streakLabel: { color: colors.textSecondary, fontSize: 13, marginTop: 6 },
 })

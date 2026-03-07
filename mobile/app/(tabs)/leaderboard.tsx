@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { View, Text, FlatList, StyleSheet, ActivityIndicator, Pressable, ScrollView } from 'react-native'
+import { colors } from '../../lib/theme'
 import { useAuth } from '../../hooks/useAuth'
 import { getCategories, getLeaderboardForCategory } from '../../lib/api'
 import { CATEGORY_EMOJIS } from '../../lib/categoryEmojis'
@@ -71,7 +72,7 @@ export default function LeaderboardScreen() {
 
       {/* List */}
       {loading ? (
-        <ActivityIndicator color="#7c3aed" style={{ marginTop: 40 }} />
+        <ActivityIndicator color={colors.accent} style={{ marginTop: 40 }} />
       ) : entries.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Text style={styles.empty}>No entries yet.</Text>
@@ -84,7 +85,7 @@ export default function LeaderboardScreen() {
           contentContainerStyle={{ paddingBottom: 40 }}
           renderItem={({ item, index }) => {
             const isMe = item.user_id === userId
-            const rankColor = index === 0 ? '#facc15' : index === 1 ? '#94a3b8' : index === 2 ? '#c97c3a' : '#555'
+            const rankColor = index === 0 ? '#facc15' : index === 1 ? '#94a3b8' : index === 2 ? '#c97c3a' : colors.textTertiary
             return (
               <View style={[styles.row, isMe && styles.myRow]}>
                 <Text style={[styles.rank, { color: rankColor }]}>#{index + 1}</Text>
@@ -103,8 +104,8 @@ export default function LeaderboardScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0a0a0a', paddingTop: 80 },
-  title: { color: '#7c3aed', fontSize: 28, fontWeight: '800', marginBottom: 20, paddingHorizontal: 20 },
+  container: { flex: 1, backgroundColor: colors.bg, paddingTop: 80 },
+  title: { color: colors.accent, fontSize: 28, fontWeight: '800', marginBottom: 20, paddingHorizontal: 20 },
   tabsContainer: { flexGrow: 0, marginBottom: 20 },
   tabsContent: { paddingHorizontal: 16, gap: 8, flexDirection: 'row' },
   tab: {
@@ -113,31 +114,31 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 20,
-    backgroundColor: '#1e1e2e',
+    backgroundColor: colors.bgCard,
     borderWidth: 1,
-    borderColor: '#2a2a3e',
+    borderColor: colors.border,
     gap: 6,
   },
-  tabActive: { backgroundColor: '#3b1f6e', borderColor: '#7c3aed' },
+  tabActive: { backgroundColor: colors.accentLight, borderColor: colors.accent },
   tabEmoji: { fontSize: 14 },
-  tabLabel: { color: '#888', fontSize: 13, fontWeight: '600' },
-  tabLabelActive: { color: '#fff' },
+  tabLabel: { color: colors.textSecondary, fontSize: 13, fontWeight: '600' },
+  tabLabelActive: { color: colors.accent },
   emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  empty: { color: '#fff', fontSize: 16, fontWeight: '600', marginBottom: 6 },
-  emptySub: { color: '#555', fontSize: 13 },
+  empty: { color: colors.textPrimary, fontSize: 16, fontWeight: '600', marginBottom: 6 },
+  emptySub: { color: colors.textTertiary, fontSize: 13 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 14,
     paddingHorizontal: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#1e1e2e',
+    borderBottomColor: colors.border,
   },
-  myRow: { backgroundColor: '#1e1e2e' },
+  myRow: { backgroundColor: colors.accentLight },
   rank: { width: 36, fontSize: 14, fontWeight: '700' },
-  name: { flex: 1, color: '#fff', fontSize: 15 },
-  myName: { color: '#a78bfa', fontWeight: '700' },
+  name: { flex: 1, color: colors.textPrimary, fontSize: 15 },
+  myName: { color: colors.accent, fontWeight: '700' },
   scoreCol: { alignItems: 'flex-end' },
-  score: { color: '#7c3aed', fontSize: 16, fontWeight: '700' },
-  time: { color: '#555', fontSize: 11, marginTop: 1 },
+  score: { color: colors.accent, fontSize: 16, fontWeight: '700' },
+  time: { color: colors.textTertiary, fontSize: 11, marginTop: 1 },
 })
