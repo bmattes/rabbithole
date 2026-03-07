@@ -1,7 +1,8 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import { Entity } from './graphBuilder'
-import { fetchEntities, CategoryDomain } from './wikidata'
+import { fetchEntities, CategoryDomain, WikidataDomain } from './wikidata'
+import { fetchMusicBrainzEntities, MusicBrainzDomain } from './musicbrainz'
 import { enrichWithPageviews } from './pageviewEnricher'
 
 const CACHE_DIR = path.join(__dirname, '../../.entity-cache')
@@ -49,8 +50,16 @@ export async function fetchEntitiesCached(
     }
   }
 
-  const entities = await fetchEntities(domain, limit)
-  await enrichWithPageviews(entities)
+  const isMusicBrainz = (domain as string).startsWith('mb_')
+  const entities = isMusicBrainz
+    ? await fetchMusicBrainzEntities(domain as MusicBrainzDomain, limit)
+    : await fetchEntities(domain as WikidataDomain, limit)
+
+  if (!isMusicBrainz) {
+    // MusicBrainz entities have non-Wikidata IDs — pageview enrichment only applies to Wikidata QIDs
+    await enrichWithPageviews(entities)
+  }
+
   writeCache(domain, entities)
   return entities
 }

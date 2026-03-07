@@ -2,7 +2,8 @@ import { Entity } from './graphBuilder'
 
 const WIKIDATA_ENDPOINT = 'https://query.wikidata.org/sparql'
 
-export type CategoryDomain = 'movies' | 'sport' | 'music' | 'science' | 'history'
+export type WikidataDomain = 'movies' | 'sport' | 'music' | 'science' | 'history'
+export type CategoryDomain = WikidataDomain | 'mb_rock' | 'mb_hiphop' | 'mb_pop' | 'mb_rnb' | 'mb_country' | 'mb_electronic'
 
 // Sport uses multiple focused queries to avoid Wikidata timeouts
 const SPORT_SUBQUERIES = [
@@ -96,7 +97,7 @@ const MUSIC_TYPES: [string, string][] = [
 ]
 
 // Each domain query returns pairs of (primary entity, related entity)
-const DOMAIN_QUERIES: Record<CategoryDomain, (limit: number) => string> = {
+const DOMAIN_QUERIES: Record<WikidataDomain, (limit: number) => string> = {
   // placeholder — uses subqueries instead
   movies: (_limit) => '',
   sport: (_limit) => '',
@@ -211,12 +212,12 @@ const SPORT_TYPES: [string, string][] = [
   ['team', 'city'],     // team → city
 ]
 // For single-query domains, type hint applied to all rows
-const SINGLE_QUERY_TYPES: Partial<Record<CategoryDomain, [string, string]>> = {
+const SINGLE_QUERY_TYPES: Partial<Record<WikidataDomain, [string, string]>> = {
   science: ['person', 'other'],  // scientist → institution/field
   history: ['person', 'other'],  // politician → party/position
 }
 
-export async function fetchEntities(domain: CategoryDomain, limit = 300): Promise<Entity[]> {
+export async function fetchEntities(domain: WikidataDomain, limit = 300): Promise<Entity[]> {
   const subqueries =
     domain === 'movies' ? MOVIES_SUBQUERIES :
     domain === 'sport'  ? SPORT_SUBQUERIES  :
@@ -246,3 +247,4 @@ export async function fetchEntities(domain: CategoryDomain, limit = 300): Promis
 export async function fetchMovieEntities(limit = 200): Promise<Entity[]> {
   return fetchEntities('movies', limit)
 }
+
