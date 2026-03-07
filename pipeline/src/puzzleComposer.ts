@@ -65,11 +65,12 @@ function computeDifficulty(optimalPath: string[], pathCount: number, entityMap: 
   const obscure = avgSitelinks < 60 || avgSitelinks === 0
 
   // Hard: long path OR obscure intermediates with few routes
-  if (hops >= 6) return obscure ? 'hard' : 'medium'
-  if (hops === 5 && obscure && pathCount <= 4) return 'hard'
+  if (hops >= 6) return 'hard'
+  if (hops === 5 && (obscure || pathCount <= 3)) return 'hard'
   if (hops === 5) return 'medium'
-  // 4-hop puzzles: easy only if intermediates are well-known AND many paths exist
-  if (hops === 4 && familiar && pathCount >= 8) return 'easy'
+  // 4-hop puzzles: easy if intermediates are reasonably well-known
+  if (hops === 4 && familiar) return 'easy'
+  if (hops === 4 && !obscure) return 'easy'
   return 'medium'
 }
 
