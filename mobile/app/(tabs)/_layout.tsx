@@ -1,13 +1,14 @@
 import { Tabs } from 'expo-router'
+import { colors } from '../../lib/theme'
 
 export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarStyle: { backgroundColor: '#0a0a0a', borderTopColor: '#222' },
-        tabBarActiveTintColor: '#7c3aed',
-        tabBarInactiveTintColor: '#555',
+        tabBarStyle: { backgroundColor: colors.tabBar, borderTopColor: colors.tabBorder },
+        tabBarActiveTintColor: colors.tabActive,
+        tabBarInactiveTintColor: colors.tabInactive,
       }}
     >
       <Tabs.Screen name="index" options={{ title: 'Today' }} />

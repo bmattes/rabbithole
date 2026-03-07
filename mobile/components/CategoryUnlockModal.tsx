@@ -1,5 +1,6 @@
 import { View, Text, Pressable, Modal, StyleSheet } from 'react-native'
 import { CATEGORY_EMOJIS } from '../lib/categoryEmojis'
+import { colors } from '../lib/theme'
 
 interface CategoryOption {
   id: string
@@ -35,26 +36,26 @@ export function CategoryUnlockModal({ visible, availableCategories, onSelect }: 
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: '#000000aa',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     padding: 24,
   },
   card: {
-    backgroundColor: '#1e1e2e',
+    backgroundColor: colors.bgCard,
     borderRadius: 20,
     padding: 24,
     borderWidth: 1,
-    borderColor: '#2a2a3e',
+    borderColor: colors.border,
   },
   title: {
-    color: '#fff',
+    color: colors.textPrimary,
     fontSize: 22,
     fontWeight: '800',
     marginBottom: 4,
     textAlign: 'center',
   },
   subtitle: {
-    color: '#888',
+    color: colors.textSecondary,
     fontSize: 14,
     marginBottom: 20,
     textAlign: 'center',
@@ -64,10 +65,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     padding: 14,
-    backgroundColor: '#16162a',
+    backgroundColor: colors.bgCardAlt,
     borderRadius: 12,
     marginBottom: 10,
   },
   emoji: { fontSize: 24 },
-  name: { color: '#fff', fontSize: 18, fontWeight: '600' },
+  name: { color: colors.textPrimary, fontSize: 18, fontWeight: '600' },
 })

@@ -1,4 +1,5 @@
 import { View, Text, Pressable, Modal, StyleSheet } from 'react-native'
+import { colors } from '../lib/theme'
 
 interface Props {
   visible: boolean
@@ -40,27 +41,27 @@ export function SubscribeModal({ visible, onClose, onSubscribe }: Props) {
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: '#000000aa',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
   },
   card: {
-    backgroundColor: '#1e1e2e',
+    backgroundColor: colors.bgCard,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 32,
     paddingBottom: 48,
     borderWidth: 1,
-    borderColor: '#2a2a3e',
+    borderColor: colors.border,
   },
   title: {
-    color: '#7c3aed',
+    color: colors.accent,
     fontSize: 28,
     fontWeight: '800',
     textAlign: 'center',
     marginBottom: 4,
   },
   subtitle: {
-    color: '#aaa',
+    color: colors.textSecondary,
     fontSize: 16,
     textAlign: 'center',
     marginBottom: 24,
@@ -70,23 +71,23 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   feature: {
-    color: '#ccc',
+    color: colors.textPrimary,
     fontSize: 15,
   },
   monthlyBtn: {
-    backgroundColor: '#7c3aed',
+    backgroundColor: colors.accent,
     borderRadius: 14,
     padding: 16,
     alignItems: 'center',
     marginBottom: 10,
   },
   monthlyText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 17,
     fontWeight: '700',
   },
   yearlyBtn: {
-    borderColor: '#7c3aed',
+    borderColor: colors.accent,
     borderWidth: 1,
     borderRadius: 14,
     padding: 16,
@@ -94,7 +95,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   yearlyText: {
-    color: '#7c3aed',
+    color: colors.accent,
     fontSize: 15,
     fontWeight: '600',
   },
@@ -102,7 +103,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   dismissText: {
-    color: '#555',
+    color: colors.textTertiary,
     fontSize: 14,
   },
 })
