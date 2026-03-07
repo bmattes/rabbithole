@@ -45,6 +45,11 @@ export function useAuth() {
       const { error: upsertError } = await supabase.from('users').upsert({
         id: data.user.id,
         display_name: `Player${Math.floor(Math.random() * 9999)}`,
+        // Seed starter categories: Movies + Sport
+        unlocked_categories: [
+          '5f522844-78b3-464f-9105-d15a8f746d28', // Movies
+          '945573e5-1c76-4bd3-b2a6-961276e1c224',  // Sport
+        ],
       }, { onConflict: 'id', ignoreDuplicates: true })
       if (upsertError) console.error('[Auth] users upsert failed:', upsertError.message)
     }
