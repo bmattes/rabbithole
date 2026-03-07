@@ -1,7 +1,30 @@
 export const CATEGORY_EMOJIS: Record<string, string> = {
+  // Wikidata domains
   movies: '🎬',
   sport: '🏆',
   music: '🎵',
   science: '🔬',
   history: '📜',
+  videogames: '🎮',
+  art: '🎨',
+  literature: '📚',
+  geography: '🌍',
+  royals: '👑',
+  tennis: '🎾',
+  soccer: '⚽',
+  tv: '📺',
+  philosophy: '🧠',
+  military: '⚔️',
+  mythology: '⚡',
+  space: '🚀',
+  food: '🍕',
+  // MusicBrainz domains
+  mb_rock: '🎸',
+  mb_hiphop: '🎤',
+  mb_pop: '🌟',
+  mb_rnb: '🎷',
+  mb_country: '🤠',
+  mb_electronic: '🎧',
+  // Comic Vine
+  comicvine: '🦸',
 }

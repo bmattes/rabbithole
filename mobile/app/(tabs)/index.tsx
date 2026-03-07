@@ -30,7 +30,7 @@ interface Category {
 }
 
 export default function TodayScreen() {
-  const { session, loading, signInAnonymously, userId } = useAuth()
+  const { loading, userId } = useAuth()
   const progression = useProgression(userId)
   const [allCategories, setAllCategories] = useState<Category[]>([])
   const [categoriesLoading, setCategoriesLoading] = useState(true)
@@ -40,12 +40,6 @@ export default function TodayScreen() {
     if (unlocked.length > 0) return allCategories.filter(c => unlocked.includes(c.id))
     return allCategories.slice(0, 2)
   }, [allCategories, progression.unlockedCategories])
-
-  useEffect(() => {
-    if (!loading && !session) {
-      signInAnonymously()
-    }
-  }, [loading, session])
 
   const loadCategories = useCallback(() => {
     if (loading) return
