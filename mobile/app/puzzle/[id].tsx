@@ -5,6 +5,7 @@ import { PuzzleCanvas } from '../../components/PuzzleCanvas'
 import { usePuzzle } from '../../hooks/usePuzzle'
 import { useTimer } from '../../hooks/useTimer'
 import { useAuth } from '../../hooks/useAuth'
+import { useProgression } from '../../hooks/useProgression'
 import { computeScore } from '../../lib/scoring'
 import { submitRun } from '../../lib/api'
 import { separateBubbles } from '../../lib/bubbleLayout'
@@ -24,7 +25,10 @@ export default function PuzzleScreen() {
   const { id: categoryId } = useLocalSearchParams<{ id: string }>()
   const { elapsed, start, stop } = useTimer()
   const { userId } = useAuth()
-  const { puzzle: livePuzzle, loading } = usePuzzle(categoryId, userId)
+  const progression = useProgression(userId)
+  const unlockedDifficulties = progression.unlockedDifficulties
+  const difficulty = (unlockedDifficulties[unlockedDifficulties.length - 1] ?? 'easy') as 'easy' | 'medium' | 'hard'
+  const { puzzle: livePuzzle, loading } = usePuzzle(categoryId, userId, difficulty)
   const [started, setStarted] = useState(false)
   const [currentHops, setCurrentHops] = useState(0)
   const [canvasHeight, setCanvasHeight] = useState(0)
@@ -76,7 +80,7 @@ export default function PuzzleScreen() {
 
     const narrativeParam = puzzle!.narrative ? `&narrative=${encodeURIComponent(puzzle!.narrative)}` : ''
     router.replace(
-      `/results/${puzzle!.id}?score=${score}&timeMs=${timeMs}&hops=${hops}&optimalHops=${optimalHops}&playerPath=${encodeURIComponent(playerPathLabels)}&optimalPath=${encodeURIComponent(optimalPathLabels)}${narrativeParam}`
+      `/results/${puzzle!.id}?score=${score}&timeMs=${timeMs}&hops=${hops}&optimalHops=${optimalHops}&playerPath=${encodeURIComponent(playerPathLabels)}&optimalPath=${encodeURIComponent(optimalPathLabels)}&difficulty=${difficulty}${narrativeParam}`
     )
   }
 
