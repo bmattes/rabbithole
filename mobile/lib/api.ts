@@ -313,3 +313,29 @@ export async function saveUnlockedCategory(userId: string, categoryId: string): 
 
   if (error) console.error('[saveUnlockedCategory] update failed:', error.message)
 }
+
+export async function getPathStats(
+  puzzleId: string,
+  playerHops: number
+): Promise<{ totalPlayers: number; optimalPathPct: number; sameHopsPct: number }> {
+  const { data, error } = await supabase
+    .from('player_runs')
+    .select('path')
+    .eq('puzzle_id', puzzleId)
+
+  if (error || !data || data.length === 0) {
+    return { totalPlayers: 0, optimalPathPct: 0, sameHopsPct: 0 }
+  }
+
+  const total = data.length
+  const hopCounts = data.map(r => (r.path as string[]).length - 1)
+  const minHops = Math.min(...hopCounts)
+  const optimalCount = hopCounts.filter(h => h === minHops).length
+  const sameHopsCount = hopCounts.filter(h => h === playerHops).length
+
+  return {
+    totalPlayers: total,
+    optimalPathPct: Math.round((optimalCount / total) * 100),
+    sameHopsPct: Math.round((sameHopsCount / total) * 100),
+  }
+}
