@@ -5,6 +5,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { useProgression } from '../../hooks/useProgression'
 import { getCategories } from '../../lib/api'
 import { CATEGORY_EMOJIS } from '../../lib/categoryEmojis'
+import { colors } from '../../lib/theme'
 
 const CATEGORY_HINTS: Record<string, string> = {
   movies: 'connected by directors, cast & studios',
@@ -16,8 +17,8 @@ const CATEGORY_HINTS: Record<string, string> = {
 
 const DIFFICULTY_COLORS: Record<string, string> = {
   easy: '#22c55e',
-  medium: '#eab308',
-  hard: '#ef4444',
+  medium: '#d97706',
+  hard: '#dc2626',
 }
 
 interface Category {
@@ -111,31 +112,36 @@ export default function TodayScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0a0a0a' },
+  container: { flex: 1, backgroundColor: colors.bg },
   content: { paddingTop: 80, paddingHorizontal: 24, paddingBottom: 40 },
-  center: { flex: 1, backgroundColor: '#0a0a0a', alignItems: 'center', justifyContent: 'center' },
-  title: { color: '#7c3aed', fontSize: 36, fontWeight: '800', marginBottom: 4 },
-  subtitle: { color: '#888', fontSize: 16, marginBottom: 40 },
+  center: { flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' },
+  title: { color: colors.accent, fontSize: 36, fontWeight: '800', marginBottom: 4, letterSpacing: -1 },
+  subtitle: { color: colors.textTertiary, fontSize: 15, marginBottom: 40, fontWeight: '600', letterSpacing: 0.3, textTransform: 'uppercase' },
   card: {
-    backgroundColor: '#1e1e2e',
+    backgroundColor: colors.bgCard,
     borderRadius: 16,
     padding: 20,
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#2a2a3e',
+    borderColor: colors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
   },
+  cardDone: { backgroundColor: colors.bgCardAlt, borderColor: colors.border },
   cardEmoji: { fontSize: 24, marginRight: 14 },
   cardText: { flex: 1 },
   cardTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  cardTitle: { color: '#fff', fontSize: 18, fontWeight: '600' },
+  cardTitle: { color: colors.textPrimary, fontSize: 18, fontWeight: '700' },
+  cardTitleDone: { color: colors.textTertiary },
   diffBadge: { borderRadius: 6, borderWidth: 1, paddingHorizontal: 7, paddingVertical: 2 },
   diffText: { fontSize: 11, fontWeight: '700', textTransform: 'capitalize' },
-  cardTitleDone: { color: '#555' },
-  cardHint: { color: '#888', fontSize: 12, marginTop: 3 },
-  diffAvailable: { color: '#555', fontSize: 11, marginTop: 2 },
-  cardArrow: { color: '#7c3aed', fontSize: 20, marginLeft: 8 },
-  cardDone: { borderColor: '#1a2e1a', backgroundColor: '#111811' },
-  cardCheck: { color: '#22c55e', fontSize: 20, fontWeight: '700', marginLeft: 8 },
+  cardHint: { color: colors.textTertiary, fontSize: 12, marginTop: 3 },
+  diffAvailable: { color: colors.textTertiary, fontSize: 11, marginTop: 2 },
+  cardArrow: { color: colors.accent, fontSize: 20, marginLeft: 8 },
+  cardCheck: { color: colors.success, fontSize: 20, fontWeight: '700', marginLeft: 8 },
 })
