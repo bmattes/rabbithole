@@ -17,7 +17,7 @@ export async function generateNarrative({
 
   const response = await client.chat.completions.create({
     model: 'gpt-4o-mini',
-    max_tokens: 150,
+    max_tokens: 300,
     messages: [
       {
         role: 'user',

@@ -23,13 +23,13 @@ const DOMAIN_HINTS: Record<string, string> = {
 const { width: SW } = Dimensions.get('window')
 
 export default function PuzzleScreen() {
-  const { id: categoryId } = useLocalSearchParams<{ id: string }>()
+  const { id: categoryId, categoryName } = useLocalSearchParams<{ id: string; categoryName?: string }>()
   const { elapsed, start, stop } = useTimer()
   const { userId } = useAuth()
   const progression = useProgression(userId)
   const unlockedDifficulties = progression.unlockedDifficulties
   const difficulty = (unlockedDifficulties[unlockedDifficulties.length - 1] ?? 'easy') as 'easy' | 'medium' | 'hard'
-  const { puzzle: livePuzzle, loading } = usePuzzle(categoryId, userId, difficulty)
+  const { puzzle: livePuzzle, loading, alreadyCompleted } = usePuzzle(categoryId, userId, difficulty)
   const [started, setStarted] = useState(false)
   const [currentHops, setCurrentHops] = useState(0)
   const [canvasHeight, setCanvasHeight] = useState(0)
@@ -56,6 +56,10 @@ export default function PuzzleScreen() {
     if (puzzle && !started) { start(); setStarted(true) }
   }, [puzzle])
 
+  useEffect(() => {
+    if (alreadyCompleted) router.replace('/(tabs)')
+  }, [alreadyCompleted])
+
   if (loading) return <View style={styles.center}><ActivityIndicator color="#7c3aed" size="large" /></View>
   if (!puzzle) return (
     <View style={styles.center}>
@@ -76,12 +80,14 @@ export default function PuzzleScreen() {
     const optimalPathLabels = puzzle!.optimal_path.map(id => labelMap[id] ?? id).join('|')
 
     if (!puzzle!.id.startsWith('mock-') && userId) {
-      submitRun({ puzzleId: puzzle!.id, userId, path, timeMs, score })
+      await submitRun({ puzzleId: puzzle!.id, userId, path, timeMs, score })
     }
 
     const narrativeParam = puzzle!.narrative ? `&narrative=${encodeURIComponent(puzzle!.narrative)}` : ''
+    const categoryParam = categoryName ? `&categoryName=${encodeURIComponent(categoryName)}` : ''
+    const dateParam = puzzle!.date ? `&puzzleDate=${encodeURIComponent(puzzle!.date)}` : ''
     router.replace(
-      `/results/${puzzle!.id}?score=${score}&timeMs=${timeMs}&hops=${hops}&optimalHops=${optimalHops}&playerPath=${encodeURIComponent(playerPathLabels)}&optimalPath=${encodeURIComponent(optimalPathLabels)}&difficulty=${difficulty}${narrativeParam}`
+      `/results/${puzzle!.id}?score=${score}&timeMs=${timeMs}&hops=${hops}&optimalHops=${optimalHops}&playerPath=${encodeURIComponent(playerPathLabels)}&optimalPath=${encodeURIComponent(optimalPathLabels)}&difficulty=${difficulty}${narrativeParam}${categoryParam}${dateParam}`
     )
   }
 

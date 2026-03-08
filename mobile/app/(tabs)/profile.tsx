@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { View, Text, ScrollView, StyleSheet, ActivityIndicator, TextInput, Pressable, KeyboardAvoidingView, Platform } from 'react-native'
+import { router } from 'expo-router'
 import { colors } from '../../lib/theme'
 import { useAuth } from '../../hooks/useAuth'
 import { useProgression } from '../../hooks/useProgression'
@@ -78,15 +79,41 @@ export default function ProfileScreen() {
   const totalRuns = runs.length
   const bestScore = runs.length ? Math.max(...runs.map(r => r.score)) : 0
 
+  const xpPct = Math.round((progression.xpInLevel / progression.xpForNextLevel) * 100)
+
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
     <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <Text style={styles.title}>Profile</Text>
 
-      {/* Username */}
+      {/* Hero: Level + progression */}
+      <View style={styles.levelCard}>
+        <View style={styles.levelRow}>
+          <View>
+            <Text style={styles.levelTitle}>{progression.title}</Text>
+            <Text style={styles.levelNum}>Level {progression.level}</Text>
+          </View>
+          <View style={styles.levelRight}>
+            {progression.streak > 0 && (
+              <View style={styles.streakBadge}>
+                <Text style={styles.streakText}>🔥 {progression.streak}</Text>
+              </View>
+            )}
+            {progression.isSubscriber && <Text style={styles.plusBadge}>RH+</Text>}
+          </View>
+        </View>
+        <View style={styles.xpBarBg}>
+          <View style={[styles.xpBarFill, { width: `${xpPct}%` as any }]} />
+        </View>
+        <View style={styles.xpRow}>
+          <Text style={styles.xpLabel}>{progression.xpInLevel} / {progression.xpForNextLevel} XP to next level</Text>
+          <Text style={styles.xpTotal}>{progression.totalXP} total</Text>
+        </View>
+      </View>
+
+      {/* Display name */}
       <View style={styles.nameCard}>
         <Text style={styles.nameLabel}>Display Name</Text>
-        <Text style={styles.nameHint}>Shown on leaderboards</Text>
         <View style={styles.nameRow}>
           <TextInput
             style={styles.nameInput}
@@ -109,28 +136,12 @@ export default function ProfileScreen() {
         </View>
       </View>
 
-      {/* Level Card */}
-      <View style={styles.levelCard}>
-        <View style={styles.levelRow}>
-          <Text style={styles.levelNum}>Level {progression.level}</Text>
-          <Text style={styles.levelTitle}>{progression.title}</Text>
-          {progression.isSubscriber && <Text style={styles.plusBadge}>+</Text>}
-        </View>
-        <View style={styles.xpBarBg}>
-          <View style={[styles.xpBarFill, { width: `${Math.round((progression.xpInLevel / progression.xpForNextLevel) * 100)}%` as any }]} />
-        </View>
-        <Text style={styles.xpLabel}>{progression.xpInLevel} / {progression.xpForNextLevel} XP · {progression.totalXP} total</Text>
-        <Text style={styles.streakLabel}>🔥 {progression.streak} day streak</Text>
-      </View>
-
-      <Text style={styles.title2}>My Stats</Text>
-
       {loading ? (
         <ActivityIndicator color={colors.accent} style={{ marginTop: 40 }} />
       ) : totalRuns === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.empty}>No runs yet</Text>
-          <Text style={styles.emptySub}>Complete a puzzle to see your stats here.</Text>
+          <Text style={styles.empty}>No puzzles completed yet</Text>
+          <Text style={styles.emptySub}>Your stats will appear here after your first run.</Text>
         </View>
       ) : (
         <>
@@ -181,8 +192,23 @@ export default function ProfileScreen() {
           {runs.slice(0, 10).map((run, i) => {
             const cat = run.puzzles?.categories
             const puzzle = run.puzzles
+            const bubbles = (puzzle?.bubbles as Array<{ id: string; label: string }> | undefined) ?? []
+            const labelMap = Object.fromEntries(bubbles.map(b => [b.id, b.label]))
+            const playerLabels = (run.path as string[]).map(id => labelMap[id] ?? id).join('|')
+            const optimalLabels = (puzzle?.optimal_path as string[] | undefined)?.map(id => labelMap[id] ?? id).join('|') ?? ''
             return (
-              <View key={i} style={styles.runRow}>
+              <Pressable
+                key={i}
+                style={({ pressed }) => [styles.runRow, pressed && styles.runRowPressed]}
+                onPress={() => {
+                  if (!run.puzzle_id || !puzzle) return
+                  const narrativeParam = puzzle.narrative ? `&narrative=${encodeURIComponent(puzzle.narrative)}` : ''
+                  const categoryParam = cat?.name ? `&categoryName=${encodeURIComponent(cat.name)}` : ''
+                  router.push(
+                    `/results/${run.puzzle_id}?score=${run.score}&timeMs=${run.time_ms}&hops=${run.path.length - 1}&optimalHops=${(puzzle.optimal_path as string[]).length - 1}&playerPath=${encodeURIComponent(playerLabels)}&optimalPath=${encodeURIComponent(optimalLabels)}&difficulty=${puzzle.difficulty ?? 'easy'}&skipXP=1${narrativeParam}${categoryParam}`
+                  )
+                }}
+              >
                 <Text style={styles.runEmoji}>{CATEGORY_EMOJIS[cat?.wikidata_domain] ?? '🐇'}</Text>
                 <View style={styles.runInfo}>
                   <Text style={styles.runTitle} numberOfLines={1}>
@@ -193,7 +219,8 @@ export default function ProfileScreen() {
                   </Text>
                 </View>
                 <Text style={styles.runScore}>{run.score}</Text>
-              </View>
+                <Text style={styles.runChevron}>›</Text>
+              </Pressable>
             )
           })}
         </>
@@ -212,17 +239,35 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   content: { paddingTop: 80, paddingHorizontal: 20, paddingBottom: 60 },
   title: { color: colors.accent, fontSize: 28, fontWeight: '800', marginBottom: 20 },
-  title2: { color: colors.textPrimary, fontSize: 20, fontWeight: '700', marginBottom: 16, marginTop: 8 },
+  levelCard: {
+    backgroundColor: colors.bgCard,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  levelRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 },
+  levelRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  levelTitle: { color: colors.accent, fontSize: 13, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 },
+  levelNum: { color: colors.textPrimary, fontSize: 28, fontWeight: '800' },
+  streakBadge: { backgroundColor: colors.accentLight, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5 },
+  streakText: { color: colors.accent, fontSize: 13, fontWeight: '700' },
+  plusBadge: { color: '#f59e0b', fontSize: 12, fontWeight: '800', backgroundColor: '#fef3c7', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  xpBarBg: { height: 8, backgroundColor: colors.border, borderRadius: 4, marginBottom: 8 },
+  xpBarFill: { height: 8, backgroundColor: colors.accent, borderRadius: 4 },
+  xpRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  xpLabel: { color: colors.textSecondary, fontSize: 12 },
+  xpTotal: { color: colors.textTertiary, fontSize: 12 },
   nameCard: {
     backgroundColor: colors.bgCard,
     borderRadius: 16,
     padding: 16,
-    marginBottom: 28,
+    marginBottom: 24,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  nameLabel: { color: colors.textPrimary, fontSize: 14, fontWeight: '600', marginBottom: 2 },
-  nameHint: { color: colors.textTertiary, fontSize: 12, marginBottom: 12 },
+  nameLabel: { color: colors.textTertiary, fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   nameInput: {
     flex: 1,
@@ -235,18 +280,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  saveBtn: {
-    backgroundColor: colors.accent,
-    borderRadius: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
+  saveBtn: { backgroundColor: colors.accent, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10 },
   saveBtnDisabled: { opacity: 0.5 },
   saveBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
   emptyContainer: { marginTop: 60, alignItems: 'center' },
   empty: { color: colors.textPrimary, fontSize: 16, fontWeight: '600', marginBottom: 6 },
-  emptySub: { color: colors.textTertiary, fontSize: 13 },
-  summaryRow: { flexDirection: 'row', gap: 12, marginBottom: 32 },
+  emptySub: { color: colors.textTertiary, fontSize: 13, textAlign: 'center' },
+  summaryRow: { flexDirection: 'row', gap: 12, marginBottom: 28 },
   summaryCard: {
     flex: 1,
     backgroundColor: colors.bgCard,
@@ -258,7 +298,7 @@ const styles = StyleSheet.create({
   },
   summaryVal: { color: colors.accent, fontSize: 24, fontWeight: '800' },
   summaryLabel: { color: colors.textSecondary, fontSize: 11, marginTop: 4 },
-  sectionHeader: { color: colors.textSecondary, fontSize: 12, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12, marginTop: 4 },
+  sectionHeader: { color: colors.textTertiary, fontSize: 11, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10, marginTop: 4 },
   catCard: {
     backgroundColor: colors.bgCard,
     borderRadius: 12,
@@ -276,25 +316,11 @@ const styles = StyleSheet.create({
   catStatVal: { color: colors.accent, fontSize: 18, fontWeight: '700' },
   catStatLabel: { color: colors.textTertiary, fontSize: 11, marginTop: 2 },
   runRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
+  runRowPressed: { opacity: 0.6 },
   runEmoji: { fontSize: 16, marginRight: 12 },
   runInfo: { flex: 1 },
   runTitle: { color: colors.textPrimary, fontSize: 14, fontWeight: '600' },
   runMeta: { color: colors.textTertiary, fontSize: 12, marginTop: 2 },
   runScore: { color: colors.accent, fontSize: 16, fontWeight: '700', marginLeft: 12 },
-  levelCard: {
-    backgroundColor: colors.bgCard,
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  levelRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
-  levelNum: { color: colors.textPrimary, fontSize: 22, fontWeight: '800' },
-  levelTitle: { color: colors.accent, fontSize: 16, fontWeight: '600' },
-  plusBadge: { color: '#f59e0b', fontSize: 16, fontWeight: '800', marginLeft: 4 },
-  xpBarBg: { height: 6, backgroundColor: colors.border, borderRadius: 3, marginBottom: 6 },
-  xpBarFill: { height: 6, backgroundColor: colors.accent, borderRadius: 3 },
-  xpLabel: { color: colors.textSecondary, fontSize: 12 },
-  streakLabel: { color: colors.textSecondary, fontSize: 13, marginTop: 6 },
+  runChevron: { color: colors.textTertiary, fontSize: 20, marginLeft: 6 },
 })

@@ -93,8 +93,8 @@ export function getUnlockedDifficulties(level: number): Difficulty[] {
 }
 
 export function getCategorySlotCount(level: number): number {
-  if (level >= 22) return 5
-  if (level >= 16) return 4
-  if (level >= 8)  return 3
-  return 2
+  if (level >= 22) return 6
+  if (level >= 16) return 5
+  if (level >= 8)  return 4
+  return 4
 }

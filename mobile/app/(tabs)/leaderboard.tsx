@@ -1,7 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState, useMemo } from 'react'
 import { View, Text, FlatList, StyleSheet, ActivityIndicator, Pressable, ScrollView } from 'react-native'
 import { colors } from '../../lib/theme'
 import { useAuth } from '../../hooks/useAuth'
+import { useProgression } from '../../hooks/useProgression'
 import { getCategories, getLeaderboardForCategory } from '../../lib/api'
 import { CATEGORY_EMOJIS } from '../../lib/categoryEmojis'
 
@@ -13,26 +14,37 @@ interface Category {
 
 export default function LeaderboardScreen() {
   const { userId } = useAuth()
-  const [categories, setCategories] = useState<Category[]>([])
+  const progression = useProgression(userId)
+  const [allCategories, setAllCategories] = useState<Category[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [entries, setEntries] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const fetchedRef = useRef<string | null>(null)
 
+  const categories = useMemo(() => {
+    return allCategories.filter(c => progression.unlockedCategories.includes(c.id))
+  }, [allCategories, progression.unlockedCategories])
+
   useEffect(() => {
     getCategories().then(data => {
-      const cats = data as Category[]
-      setCategories(cats)
-      if (cats.length > 0) setSelectedId(cats[0].id)
+      setAllCategories(data as Category[])
     })
   }, [])
 
+  // Update selectedId when filtered categories change
   useEffect(() => {
-    if (!selectedId || fetchedRef.current === selectedId) return
+    if (categories.length > 0 && (!selectedId || !categories.find(c => c.id === selectedId))) {
+      setSelectedId(categories[0].id)
+    }
+  }, [categories])
+
+  useEffect(() => {
+    if (!selectedId) return
     fetchedRef.current = selectedId
     setLoading(true)
     setEntries([])
-    getLeaderboardForCategory(selectedId)
+    const difficulty = progression.unlockedDifficulties[progression.unlockedDifficulties.length - 1] ?? 'easy'
+    getLeaderboardForCategory(selectedId, difficulty as 'easy' | 'medium' | 'hard')
       .then(setEntries)
       .finally(() => setLoading(false))
   }, [selectedId])

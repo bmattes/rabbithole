@@ -2,11 +2,14 @@ import * as dotenv from 'dotenv'
 dotenv.config()
 
 import { createClient } from '@supabase/supabase-js'
-import { CategoryDomain } from './wikidata'
+import { CategoryDomain, SubqueryDifficulty } from './wikidata'
 import { fetchEntitiesCached } from './entityCache'
 import { buildGraph } from './graphBuilder'
 import { composePuzzleForDifficulty, Difficulty } from './puzzleComposer'
+import { DOMAIN_CONFIG } from './domainConfig'
 import { generateNarrative } from './narrativeGenerator'
+import { evaluatePuzzle, CONNECTION_TYPES } from './puzzleQC'
+import { checkDuplicate } from './puzzleDedup'
 import cron from 'node-cron'
 
 const supabase = createClient(
@@ -26,87 +29,162 @@ const ANCHOR_TYPES: Record<string, string[]> = {
   americanfootball: ['person', 'team'],
 }
 
-function buildEntityIds(entities: ReturnType<typeof buildGraph> extends infer G ? any[] : any[], domain: CategoryDomain): string[] {
+// Entity types that make unguessable bridge nodes — abstract offices, government
+// positions, academic fields. Tagged explicitly in their subqueries so we can
+// strip them from the graph before puzzle composition.
+const UNGUESSABLE_TYPES = new Set(['office', 'field', 'category'])
+
+// Normalised familiarity score: use pageviews if available, fall back to sitelinks
+function entityFamiliarity(e: any): number {
+  if (e.pageviews !== undefined) return e.pageviews / 3000
+  return e.sitelinks ?? 0
+}
+
+// Min anchor familiarity by difficulty: easy needs famous nodes, hard can use more obscure ones
+const MIN_ANCHOR_FAMILIARITY: Record<Difficulty, number> = {
+  easy:   40,   // ~sitelinks 40 or ~120k pageviews/mo — moderately well-known
+  medium: 20,
+  hard:   0,    // no floor for hard — allows expert-level endpoints
+}
+
+function filterEntities(entities: any[], domain: CategoryDomain): any[] {
+  const isBad = (e: any) => UNGUESSABLE_TYPES.has(e.entityType) || /^Q\d+$/.test(e.label ?? '')
+  const badIds = new Set(entities.filter(isBad).map((e: any) => e.id))
+  if (badIds.size === 0) return entities
+  console.log(`  [${domain}] stripping ${badIds.size} unguessable/unlabelled bridge nodes`)
+  return entities
+    .filter((e: any) => !isBad(e))
+    .map((e: any) => ({ ...e, relatedIds: e.relatedIds.filter((id: string) => !badIds.has(id)) }))
+}
+
+function buildEntityIds(entities: any[], domain: CategoryDomain, difficulty: Difficulty): string[] {
   const anchorTypes = ANCHOR_TYPES[domain] ?? null
+  const overrides = DOMAIN_CONFIG[domain]
+  const minFamiliarity = overrides?.minAnchorFamiliarity !== undefined
+    ? overrides.minAnchorFamiliarity
+    : MIN_ANCHOR_FAMILIARITY[difficulty]
   return entities
     .filter((e: any) => {
       if (e.relatedIds.length < 2) return false
       if (e.label.length > 30) return false
+      if (/^Q\d+$/.test(e.label)) return false  // reject unlabelled Wikidata entities
       if (anchorTypes && e.entityType && !anchorTypes.includes(e.entityType)) return false
+      if (minFamiliarity > 0 && entityFamiliarity(e) < minFamiliarity) return false
       return true
     })
     .map((e: any) => e.id)
 }
 
-async function attemptDifficulties(
-  difficulties: Difficulty[],
-  entities: Awaited<ReturnType<typeof fetchEntitiesCached>>,
+// Map each puzzle difficulty to the max subquery difficulty to include.
+// easy puzzles only use easy subqueries; medium adds medium; hard uses all.
+const DIFFICULTY_TO_MAX_SUBQUERY: Record<Difficulty, SubqueryDifficulty> = {
+  easy: 'easy',
+  medium: 'medium',
+  hard: 'hard',
+}
+
+async function attemptDifficulty(
+  difficulty: Difficulty,
   domain: CategoryDomain,
   categoryId: string,
   categoryName: string,
   date: string,
-): Promise<Difficulty[]> {
-  const graph = buildGraph(entities)
-  const entityIds = buildEntityIds(entities, domain)
-  const failed: Difficulty[] = []
+  forceRefresh: boolean,
+  entityLimit = 1500,
+  attempt = 1,
+): Promise<boolean> {
+  const { data: existing } = await supabase
+    .from('puzzles')
+    .select('id')
+    .eq('category_id', categoryId)
+    .eq('date', date)
+    .eq('difficulty', difficulty)
+    .eq('status', 'published')
+    .single()
 
-  for (const difficulty of difficulties) {
-    const { data: existing } = await supabase
-      .from('puzzles')
-      .select('id')
-      .eq('category_id', categoryId)
-      .eq('date', date)
-      .eq('difficulty', difficulty)
-      .eq('status', 'published')
-      .single()
-
-    if (existing) {
-      console.log(`[${categoryName}/${difficulty}] ✓ Already published for ${date}, skipping`)
-      continue
-    }
-
-    console.log(`[${categoryName}/${difficulty}] Composing puzzle...`)
-    const puzzle = composePuzzleForDifficulty({ entities, graph, entityIds, targetDifficulty: difficulty })
-
-    if (!puzzle) {
-      failed.push(difficulty)
-      continue
-    }
-
-    const entityMap = new Map(entities.map(e => [e.id, e]))
-    const pathLabels = puzzle.optimalPath.map(id => entityMap.get(id)?.label ?? id)
-    console.log(`[${categoryName}/${difficulty}] Path: ${pathLabels.join(' → ')}`)
-
-    console.log(`[${categoryName}/${difficulty}] Generating narrative...`)
-    const narrative = await generateNarrative({
-      startLabel: entityMap.get(puzzle.startId)?.label ?? puzzle.startId,
-      endLabel: entityMap.get(puzzle.endId)?.label ?? puzzle.endId,
-      pathLabels,
-      category: categoryName,
-    })
-
-    const { data, error } = await supabase.from('puzzles').upsert({
-      category_id: categoryId,
-      date,
-      start_concept: capitalize(entityMap.get(puzzle.startId)?.label ?? puzzle.startId),
-      end_concept: capitalize(entityMap.get(puzzle.endId)?.label ?? puzzle.endId),
-      bubbles: puzzle.bubbles,
-      connections: puzzle.connections,
-      optimal_path: puzzle.optimalPath,
-      difficulty: puzzle.difficulty,
-      narrative,
-      status: 'published',
-    }, { onConflict: 'category_id,date,difficulty' }).select('id').single()
-
-    if (error) {
-      console.error(`[${categoryName}/${difficulty}] DB error:`, error.message)
-      continue
-    }
-
-    console.log(`[${categoryName}/${difficulty}] ✓ Published puzzle ${data.id}`)
+  if (existing) {
+    console.log(`[${categoryName}/${difficulty}] ✓ Already published for ${date}, skipping`)
+    return true
   }
 
-  return failed
+  const maxDifficulty = DIFFICULTY_TO_MAX_SUBQUERY[difficulty]
+  console.log(`[${categoryName}/${difficulty}] Fetching entities (max subquery: ${maxDifficulty})...`)
+  const entities = await fetchEntitiesCached(domain, entityLimit, { forceRefresh, maxDifficulty })
+  console.log(`[${categoryName}/${difficulty}] Got ${entities.length} entities`)
+
+  const filtered = filterEntities(entities, domain)
+  if (filtered.length < entities.length) {
+    console.log(`[${categoryName}/${difficulty}] Stripped ${entities.length - filtered.length} abstract bridge nodes`)
+  }
+
+  const graph = buildGraph(filtered)
+  const entityIds = buildEntityIds(filtered, domain, difficulty)
+
+  console.log(`[${categoryName}/${difficulty}] Composing puzzle...`)
+  const domainOverrides = DOMAIN_CONFIG[domain]
+  const puzzle = composePuzzleForDifficulty({ entities: filtered, graph, entityIds, targetDifficulty: difficulty, domainOverrides })
+
+  if (!puzzle) return false
+
+  const entityMap = new Map(filtered.map(e => [e.id, e]))
+  const pathLabels = puzzle.optimalPath.map(id => entityMap.get(id)?.label ?? id)
+  console.log(`[${categoryName}/${difficulty}] Path: ${pathLabels.join(' → ')}`)
+
+  // Cross-day deduplication check
+  const dedup = await checkDuplicate(supabase, categoryId, difficulty, date, puzzle.optimalPath)
+  if (dedup.isDuplicate) {
+    console.log(`[${categoryName}/${difficulty}] ✗ DEDUP rejected: ${dedup.reason}`)
+    return false
+  }
+
+  console.log(`[${categoryName}/${difficulty}] Generating narrative...`)
+  const narrative = await generateNarrative({
+    startLabel: entityMap.get(puzzle.startId)?.label ?? puzzle.startId,
+    endLabel: entityMap.get(puzzle.endId)?.label ?? puzzle.endId,
+    pathLabels,
+    category: categoryName,
+  })
+
+  const { data, error } = await supabase.from('puzzles').upsert({
+    category_id: categoryId,
+    date,
+    start_concept: capitalize(entityMap.get(puzzle.startId)?.label ?? puzzle.startId),
+    end_concept: capitalize(entityMap.get(puzzle.endId)?.label ?? puzzle.endId),
+    bubbles: puzzle.bubbles,
+    connections: puzzle.connections,
+    optimal_path: puzzle.optimalPath,
+    difficulty: puzzle.difficulty,
+    narrative,
+    status: 'published',
+  }, { onConflict: 'category_id,date,difficulty' }).select('id').single()
+
+  if (error) {
+    console.error(`[${categoryName}/${difficulty}] DB error:`, error.message)
+    return false
+  }
+
+  console.log(`[${categoryName}/${difficulty}] ✓ Published puzzle ${data.id}`)
+
+  // Inline QC — evaluate the puzzle right after publishing
+  const connectionType = CONNECTION_TYPES[domain]?.[difficulty] ?? 'related concepts'
+  process.stdout.write(`[${categoryName}/${difficulty}] QC: ${pathLabels.join(' → ')}\n  Evaluating... `)
+  try {
+    const qcResult = await evaluatePuzzle(categoryName, difficulty, pathLabels, connectionType, domain)
+    if (qcResult.pass) {
+      console.log(`✓ PASS (${qcResult.score}/10) — ${qcResult.verdict}`)
+      await supabase.from('puzzles').update({ qc_score: qcResult.score }).eq('id', data.id)
+      return true
+    } else {
+      console.log(`✗ FAIL (${qcResult.score}/10) — ${qcResult.verdict}`)
+      for (const issue of qcResult.issues) console.log(`    ⚠ ${issue}`)
+      // Delete this puzzle so the caller can retry
+      await supabase.from('puzzles').delete().eq('id', data.id)
+      return false
+    }
+  } catch (err: any) {
+    console.log(`QC error: ${err.message} — keeping puzzle`)
+    return true
+  }
 }
 
 async function generatePuzzleForCategory(
@@ -115,24 +193,24 @@ async function generatePuzzleForCategory(
   domain: CategoryDomain,
   date: string
 ) {
-  console.log(`\n[${categoryName}] Fetching entities...`)
   const forceRefresh = process.argv.includes('--refresh-cache')
-  const entities = await fetchEntitiesCached(domain, undefined, { forceRefresh })
-  console.log(`[${categoryName}] Got ${entities.length} entities`)
-
   const allDifficulties: Difficulty[] = ['easy', 'medium', 'hard']
-  const failed = await attemptDifficulties(allDifficulties, entities, domain, categoryId, categoryName, date)
 
-  if (failed.length === 0) return
-
-  // Some difficulties failed — re-fetch with a larger dataset and retry
-  console.log(`[${categoryName}] ${failed.join(', ')} failed — enriching dataset and retrying...`)
-  const enrichedEntities = await fetchEntitiesCached(domain, 3000, { forceRefresh: true })
-  console.log(`[${categoryName}] Enriched: ${enrichedEntities.length} entities`)
-
-  const stillFailed = await attemptDifficulties(failed, enrichedEntities, domain, categoryId, categoryName, date)
-  for (const difficulty of stillFailed) {
-    console.error(`[${categoryName}/${difficulty}] Failed to compose puzzle after enrichment`)
+  for (const difficulty of allDifficulties) {
+    // Up to 3 attempts: 1500 entities → 3000 → 3000 (force refresh)
+    const retryConfigs = [
+      { entityLimit: 1500, forceRefresh },
+      { entityLimit: 3000, forceRefresh: true },
+      { entityLimit: 3000, forceRefresh: true },
+    ]
+    let passed = false
+    for (let i = 0; i < retryConfigs.length; i++) {
+      const cfg = retryConfigs[i]
+      if (i > 0) console.log(`[${categoryName}/${difficulty}] Retry ${i}/${retryConfigs.length - 1}...`)
+      const ok = await attemptDifficulty(difficulty, domain, categoryId, categoryName, date, cfg.forceRefresh, cfg.entityLimit, i + 1)
+      if (ok) { passed = true; break }
+    }
+    if (!passed) console.error(`[${categoryName}/${difficulty}] Failed after all retries`)
   }
 }
 

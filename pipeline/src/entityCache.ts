@@ -1,9 +1,8 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import { Entity } from './graphBuilder'
-import { fetchEntities, CategoryDomain, WikidataDomain } from './wikidata'
+import { fetchEntities, CategoryDomain, WikidataDomain, SubqueryDifficulty } from './wikidata'
 import { fetchMusicBrainzEntities, MusicBrainzDomain } from './musicbrainz'
-import { fetchComicVineEntities } from './comicvine'
 import { enrichWithPageviews } from './pageviewEnricher'
 
 const CACHE_DIR = path.join(__dirname, '../../.entity-cache')
@@ -15,12 +14,13 @@ interface CacheEntry {
   entities: Entity[]
 }
 
-function cachePath(domain: CategoryDomain): string {
-  return path.join(CACHE_DIR, `${domain}.json`)
+function cachePath(domain: CategoryDomain, difficulty?: SubqueryDifficulty): string {
+  const key = difficulty ? `${domain}-${difficulty}` : domain
+  return path.join(CACHE_DIR, `${key}.json`)
 }
 
-function readCache(domain: CategoryDomain): CacheEntry | null {
-  const file = cachePath(domain)
+function readCache(domain: CategoryDomain, difficulty?: SubqueryDifficulty): CacheEntry | null {
+  const file = cachePath(domain, difficulty)
   if (!fs.existsSync(file)) return null
   try {
     const entry = JSON.parse(fs.readFileSync(file, 'utf8')) as CacheEntry
@@ -31,40 +31,38 @@ function readCache(domain: CategoryDomain): CacheEntry | null {
   }
 }
 
-function writeCache(domain: CategoryDomain, entities: Entity[]): void {
+function writeCache(domain: CategoryDomain, entities: Entity[], difficulty?: SubqueryDifficulty): void {
   if (!fs.existsSync(CACHE_DIR)) fs.mkdirSync(CACHE_DIR, { recursive: true })
   const entry: CacheEntry = { fetchedAt: Date.now(), domain, entities }
-  fs.writeFileSync(cachePath(domain), JSON.stringify(entry))
+  fs.writeFileSync(cachePath(domain, difficulty), JSON.stringify(entry))
 }
 
 export async function fetchEntitiesCached(
   domain: CategoryDomain,
   limit = 1500,
-  { forceRefresh = false } = {}
+  { forceRefresh = false, maxDifficulty }: { forceRefresh?: boolean; maxDifficulty?: SubqueryDifficulty } = {}
 ): Promise<Entity[]> {
+  const isMusicBrainz = (domain as string).startsWith('mb_')
+  // MusicBrainz domains don't use difficulty-based subqueries
+  const diffKey = isMusicBrainz ? undefined : maxDifficulty
+
   if (!forceRefresh) {
-    const cached = readCache(domain)
+    const cached = readCache(domain, diffKey)
     if (cached) {
       const ageHours = Math.round((Date.now() - cached.fetchedAt) / 3600000)
-      console.log(`  [${domain}] using cached entities (${cached.entities.length} entities, ${ageHours}h old)`)
+      console.log(`  [${domain}${diffKey ? `/${diffKey}` : ''}] using cached entities (${cached.entities.length} entities, ${ageHours}h old)`)
       return cached.entities
     }
   }
 
-  const isMusicBrainz = (domain as string).startsWith('mb_')
-  const isComicVine = domain === 'comicvine'
+  const entities = isMusicBrainz
+    ? await fetchMusicBrainzEntities(domain as MusicBrainzDomain, limit)
+    : await fetchEntities(domain as WikidataDomain, limit, maxDifficulty)
 
-  const entities = isComicVine
-    ? await fetchComicVineEntities(limit)
-    : isMusicBrainz
-      ? await fetchMusicBrainzEntities(domain as MusicBrainzDomain, limit)
-      : await fetchEntities(domain as WikidataDomain, limit)
-
-  if (!isMusicBrainz && !isComicVine) {
-    // Only Wikidata entities have QIDs — pageview enrichment only applies to those
+  if (!isMusicBrainz) {
     await enrichWithPageviews(entities)
   }
 
-  writeCache(domain, entities)
+  writeCache(domain, entities, diffKey)
   return entities
 }

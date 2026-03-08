@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { View, Text, Pressable, StyleSheet, ScrollView, ActivityIndicator } from 'react-native'
 import { router } from 'expo-router'
-import { getCategories, saveUnlockedCategory } from '../lib/api'
+import { getCategories, saveUnlockedCategories } from '../lib/api'
 import { CATEGORY_EMOJIS } from '../lib/categoryEmojis'
 import { colors } from '../lib/theme'
 import { useAuth } from '../hooks/useAuth'
@@ -44,7 +44,7 @@ export default function OnboardingScreen() {
   async function confirm() {
     if (!userId || selected.size < PICK_COUNT) return
     setSaving(true)
-    await Promise.all(Array.from(selected).map(id => saveUnlockedCategory(userId, id)))
+    await saveUnlockedCategories(userId, Array.from(selected))
     router.replace('/(tabs)')
   }
 

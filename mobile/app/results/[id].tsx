@@ -1,9 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { View, Text, ScrollView, StyleSheet, Pressable, Share } from 'react-native'
+import { View, Text, ScrollView, StyleSheet, Pressable, Share, Animated } from 'react-native'
 import { useLocalSearchParams, router } from 'expo-router'
 import { colors } from '../../lib/theme'
 import { awardXP, getPathStats, localDateString } from '../../lib/api'
-import { computeRunXP } from '../../lib/progression'
 import { useAuth } from '../../hooks/useAuth'
 
 function BoldTermsText({ text, terms, style }: { text: string; terms: string[]; style: object }) {
@@ -29,16 +28,25 @@ function BoldTermsText({ text, terms, style }: { text: string; terms: string[]; 
   )
 }
 
-function PathDisplay({ labels, color }: { labels: string[]; color: string }) {
+function PathDisplay({ labels, color, stepOpacities }: { labels: string[]; color: string; stepOpacities?: Animated.Value[] }) {
   return (
     <View style={pathStyles.row}>
-      {labels.map((label, i) => (
-        <View key={i} style={pathStyles.stepRow}>
-          <View style={[pathStyles.dot, { backgroundColor: color }]} />
-          <Text style={pathStyles.label}>{label}</Text>
-          {i < labels.length - 1 && <Text style={pathStyles.arrow}>↓</Text>}
-        </View>
-      ))}
+      {labels.map((label, i) => {
+        const anim = stepOpacities?.[i]
+        const content = (
+          <View key={i} style={pathStyles.stepRow}>
+            <View style={[pathStyles.dot, { backgroundColor: color }]} />
+            <Text style={pathStyles.label}>{label}</Text>
+            {i < labels.length - 1 && <Text style={pathStyles.arrow}>↓</Text>}
+          </View>
+        )
+        if (!anim) return content
+        return (
+          <Animated.View key={i} style={{ opacity: anim }}>
+            {content}
+          </Animated.View>
+        )
+      })}
     </View>
   )
 }
@@ -52,7 +60,7 @@ const pathStyles = StyleSheet.create({
 })
 
 export default function ResultsScreen() {
-  const { id: puzzleId, score, timeMs, hops, optimalHops, playerPath, optimalPath, narrative, difficulty } =
+  const { id: puzzleId, score, timeMs, hops, optimalHops, playerPath, optimalPath, narrative, difficulty, categoryName, puzzleDate, skipXP } =
     useLocalSearchParams<{
       id: string
       score: string
@@ -63,12 +71,18 @@ export default function ResultsScreen() {
       optimalPath: string
       narrative: string
       difficulty: string
+      categoryName?: string
+      puzzleDate?: string
+      skipXP?: string
     }>()
 
   const { userId } = useAuth()
   const xpAwarded = useRef(false)
   const [earnedXP, setEarnedXP] = useState(0)
   const [pathStats, setPathStats] = useState<{ totalPlayers: number; optimalPathPct: number; sameHopsPct: number } | null>(null)
+  const [displayScore, setDisplayScore] = useState(0)
+  const playerStepOpacities = useRef<Animated.Value[]>([]).current
+  const optimalStepOpacities = useRef<Animated.Value[]>([]).current
 
   const totalMs = parseInt(timeMs ?? '0')
   const minutes = Math.floor(totalMs / 60000)
@@ -85,31 +99,72 @@ export default function ResultsScreen() {
   const grade = beatOptimal ? 'Genius' : samePathAsOptimal ? 'Perfect' : scoreNum >= 700 ? 'Great' : scoreNum >= 500 ? 'Good' : 'Keep trying'
 
   useEffect(() => {
-    if (xpAwarded.current) return
+    if (xpAwarded.current || !userId || skipXP === '1') return
     xpAwarded.current = true
-    const xp = computeRunXP({
+    awardXP({
+      userId,
       difficulty: (difficulty as 'easy' | 'medium' | 'hard') ?? 'easy',
       isOptimalPath: samePathAsOptimal,
       timeMs: totalMs,
-      streakDay: 0, // will be wired to real streak in a future task
+      playedDate: localDateString(),
+    }).then(({ earnedXP, totalXP, newStreak }) => {
+      setEarnedXP(earnedXP)
+      console.log('[Results] XP awarded:', earnedXP, 'total:', totalXP, 'streak:', newStreak)
     })
-    setEarnedXP(xp)
-    if (userId) {
-      awardXP({
-        userId,
-        xp,
-        playedDate: localDateString(),
-      }).then(({ totalXP, newStreak }) => {
-        console.log('[Results] XP awarded:', xp, 'total:', totalXP, 'streak:', newStreak)
-      })
-    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // intentionally run once on mount
+  }, [userId]) // re-run once userId is available
 
   useEffect(() => {
     if (!puzzleId || hopsNum === 0) return
     getPathStats(puzzleId, hopsNum).then(setPathStats)
   }, [puzzleId, hopsNum])
+
+  // Score count-up animation
+  useEffect(() => {
+    if (scoreNum === 0) return
+    let start: number | null = null
+    const duration = 800
+    const step = (timestamp: number) => {
+      if (start === null) start = timestamp
+      const progress = Math.min((timestamp - start) / duration, 1)
+      // Ease-out cubic
+      const eased = 1 - Math.pow(1 - progress, 3)
+      setDisplayScore(Math.round(eased * scoreNum))
+      if (progress < 1) requestAnimationFrame(step)
+    }
+    requestAnimationFrame(step)
+  }, [scoreNum])
+
+  // Staggered path reveal
+  useEffect(() => {
+    const allLabels = [...playerLabels, ...optimalLabels]
+    if (allLabels.length === 0) return
+
+    // Initialise opacity values
+    playerLabels.forEach((_, i) => {
+      if (!playerStepOpacities[i]) playerStepOpacities[i] = new Animated.Value(0)
+      else playerStepOpacities[i].setValue(0)
+    })
+    optimalLabels.forEach((_, i) => {
+      if (!optimalStepOpacities[i]) optimalStepOpacities[i] = new Animated.Value(0)
+      else optimalStepOpacities[i].setValue(0)
+    })
+
+    const animations = playerLabels.map((_, i) =>
+      Animated.timing(playerStepOpacities[i], { toValue: 1, duration: 200, delay: i * 80, useNativeDriver: true })
+    )
+    if (!samePathAsOptimal) {
+      optimalLabels.forEach((_, i) => {
+        animations.push(
+          Animated.timing(optimalStepOpacities[i], {
+            toValue: 1, duration: 200, delay: (playerLabels.length + i) * 80 + 200, useNativeDriver: true,
+          })
+        )
+      })
+    }
+    Animated.parallel(animations).start()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const DIFFICULTY_EMOJI: Record<string, string> = { easy: '🟢', medium: '🟡', hard: '🔴' }
   const diffEmoji = DIFFICULTY_EMOJI[(difficulty as string) ?? 'easy'] ?? '🟢'
@@ -136,11 +191,22 @@ export default function ResultsScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>RabbitHole</Text>
+      {categoryName ? (
+        <View style={styles.header}>
+          <Text style={styles.title}>{decodeURIComponent(categoryName)}</Text>
+          {puzzleDate && (
+            <Text style={styles.dateLabel}>
+              {new Date(puzzleDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+            </Text>
+          )}
+        </View>
+      ) : (
+        <Text style={styles.title}>RabbitHole</Text>
+      )}
 
       <View style={styles.scoreCard}>
         <Text style={styles.grade}>{grade}</Text>
-        <Text style={styles.scoreValue}>{scoreNum}</Text>
+        <Text style={styles.scoreValue}>{displayScore}</Text>
         <Text style={styles.scoreLabel}>points</Text>
         {earnedXP > 0 && (
           <View style={styles.xpBadge}>
@@ -176,14 +242,14 @@ export default function ResultsScreen() {
         )}
         <View style={styles.pathCol}>
           <Text style={styles.pathTitle}>{samePathAsOptimal ? 'Your Path = Optimal Path' : 'Your Path'}</Text>
-          <PathDisplay labels={playerLabels} color={beatOptimal ? '#22c55e' : samePathAsOptimal ? '#7c3aed' : '#eab308'} />
+          <PathDisplay labels={playerLabels} color={beatOptimal ? '#22c55e' : samePathAsOptimal ? '#7c3aed' : '#eab308'} stepOpacities={playerStepOpacities} />
         </View>
         {!samePathAsOptimal && (
           <>
             <View style={styles.pathDivider} />
             <View style={styles.pathCol}>
               <Text style={styles.pathTitle}>Optimal Path</Text>
-              <PathDisplay labels={optimalLabels} color="#7c3aed" />
+              <PathDisplay labels={optimalLabels} color="#7c3aed" stepOpacities={optimalStepOpacities} />
             </View>
           </>
         )}
@@ -238,7 +304,9 @@ export default function ResultsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   content: { padding: 24, paddingTop: 72, alignItems: 'center' },
-  title: { color: colors.accent, fontSize: 32, fontWeight: '800', marginBottom: 24, letterSpacing: -0.5 },
+  header: { alignItems: 'center', marginBottom: 24 },
+  title: { color: colors.accent, fontSize: 32, fontWeight: '800', letterSpacing: -0.5 },
+  dateLabel: { color: colors.textTertiary, fontSize: 13, marginTop: 4 },
   scoreCard: {
     backgroundColor: colors.bgCard,
     borderRadius: 24,

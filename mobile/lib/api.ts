@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { computeRunXP } from './progression'
 
 export interface Puzzle {
   id: string
@@ -81,15 +82,15 @@ export async function submitRun({
   if (userError) console.error('[submitRun] user upsert failed:', userError.message, userError.code)
   else console.log('[submitRun] user upsert ok')
 
-  const { error } = await supabase.from('player_runs').upsert({
+  const { error } = await supabase.from('player_runs').insert({
     puzzle_id: puzzleId,
     user_id: userId,
     path,
     time_ms: timeMs,
     score,
-  }, { onConflict: 'puzzle_id,user_id' })
-  if (error) console.error('[submitRun] run upsert failed:', error.message, error.code)
-  else console.log('[submitRun] run upsert ok')
+  })
+  if (error) console.error('[submitRun] run insert failed:', error.message, error.code)
+  else console.log('[submitRun] run insert ok')
 }
 
 export async function getLeaderboard(puzzleId: string) {
@@ -124,13 +125,13 @@ export async function getLeaderboardToday() {
   return data ?? []
 }
 
-export async function getLeaderboardForCategory(categoryId: string) {
-  // Get most recent published puzzle for this category
+export async function getLeaderboardForCategory(categoryId: string, difficulty: 'easy' | 'medium' | 'hard' = 'easy') {
   const { data: puzzle } = await supabase
     .from('puzzles')
     .select('id')
     .eq('category_id', categoryId)
     .eq('status', 'published')
+    .eq('difficulty', difficulty)
     .order('date', { ascending: false })
     .limit(1)
     .single()
@@ -148,7 +149,7 @@ export async function getLeaderboardForCategory(categoryId: string) {
   return data ?? []
 }
 
-export async function getCategories(userId?: string | null) {
+export async function getCategories(userId?: string | null, difficulty: 'easy' | 'medium' | 'hard' = 'easy') {
   const { data: cats } = await supabase
     .from('categories')
     .select('*')
@@ -163,19 +164,29 @@ export async function getCategories(userId?: string | null) {
         .select('id, difficulty')
         .eq('category_id', cat.id)
         .eq('status', 'published')
+        .eq('difficulty', difficulty)
         .order('date', { ascending: false })
         .limit(1)
         .single()
 
       let completed = false
-      if (puzzle && userId) {
+      if (userId) {
+        // Check if user completed any puzzle for this category today
         const { data: run } = await supabase
           .from('player_runs')
           .select('puzzle_id')
-          .eq('puzzle_id', puzzle.id)
           .eq('user_id', userId)
+          .in('puzzle_id', await supabase
+            .from('puzzles')
+            .select('id')
+            .eq('category_id', cat.id)
+            .eq('status', 'published')
+            .order('date', { ascending: false })
+            .limit(3)
+            .then(r => (r.data ?? []).map((p: { id: string }) => p.id))
+          )
           .limit(1)
-          .single()
+          .maybeSingle()
         completed = !!run
       }
 
@@ -210,7 +221,7 @@ export async function getDisplayName(userId: string): Promise<string | null> {
 export async function getMyRuns(userId: string) {
   const { data, error } = await supabase
     .from('player_runs')
-    .select('puzzle_id, score, time_ms, path, created_at, puzzles(category_id, start_concept, end_concept, categories(name, wikidata_domain))')
+    .select('puzzle_id, score, time_ms, path, created_at, puzzles(category_id, start_concept, end_concept, optimal_path, narrative, difficulty, bubbles, categories(name, wikidata_domain))')
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
     .limit(50)
@@ -220,13 +231,17 @@ export async function getMyRuns(userId: string) {
 
 export async function awardXP({
   userId,
-  xp,
+  difficulty,
+  isOptimalPath,
+  timeMs,
   playedDate,
 }: {
   userId: string
-  xp: number
+  difficulty: 'easy' | 'medium' | 'hard'
+  isOptimalPath: boolean
+  timeMs: number
   playedDate: string // 'YYYY-MM-DD'
-}): Promise<{ totalXP: number; newStreak: number }> {
+}): Promise<{ earnedXP: number; totalXP: number; newStreak: number }> {
   const { data: user, error: fetchError } = await supabase
     .from('users')
     .select('total_xp, streak, last_played_date')
@@ -235,7 +250,7 @@ export async function awardXP({
 
   if (fetchError || !user) {
     console.error('[awardXP] fetch failed:', fetchError?.message)
-    return { totalXP: 0, newStreak: 0 }
+    return { earnedXP: 0, totalXP: 0, newStreak: 0 }
   }
 
   const lastPlayed = user.last_played_date as string | null
@@ -243,6 +258,7 @@ export async function awardXP({
   yesterday.setDate(yesterday.getDate() - 1)
   const yesterdayStr = yesterday.toISOString().split('T')[0]
 
+  // Compute new streak first so streakDay is accurate for XP calculation
   let newStreak = user.streak as number
   if (lastPlayed === yesterdayStr) {
     newStreak = (user.streak as number) + 1
@@ -250,7 +266,8 @@ export async function awardXP({
     newStreak = 1
   }
 
-  const newTotalXP = (user.total_xp as number) + xp
+  const earnedXP = computeRunXP({ difficulty, isOptimalPath, timeMs, streakDay: newStreak })
+  const newTotalXP = (user.total_xp as number) + earnedXP
 
   const { error: updateError } = await supabase
     .from('users')
@@ -263,10 +280,10 @@ export async function awardXP({
 
   if (updateError) {
     console.error('[awardXP] update failed:', updateError.message)
-    return { totalXP: 0, newStreak: 0 }
+    return { earnedXP: 0, totalXP: 0, newStreak: 0 }
   }
 
-  return { totalXP: newTotalXP, newStreak }
+  return { earnedXP, totalXP: newTotalXP, newStreak }
 }
 
 export async function getProgression(userId: string): Promise<{
@@ -292,26 +309,36 @@ export async function getProgression(userId: string): Promise<{
 }
 
 export async function saveUnlockedCategory(userId: string, categoryId: string): Promise<void> {
-  const { data, error: fetchError } = await supabase
+  return saveUnlockedCategories(userId, [categoryId])
+}
+
+export async function saveUnlockedCategories(userId: string, categoryIds: string[]): Promise<void> {
+  // Upsert: create the user row if it doesn't exist yet (onboarding case),
+  // or merge new category IDs into the existing array.
+  const { data: existing } = await supabase
     .from('users')
     .select('unlocked_categories')
     .eq('id', userId)
-    .single()
+    .maybeSingle()
 
-  if (fetchError) {
-    console.error('[saveUnlockedCategory] fetch failed:', fetchError.message)
-    return
+  const current: string[] = (existing?.unlocked_categories as string[]) ?? []
+  const merged = [...new Set([...current, ...categoryIds])]
+
+  // Insert with a placeholder display_name (not-null constraint);
+  // on conflict (user already exists) only update unlocked_categories.
+  if (existing) {
+    const { error } = await supabase
+      .from('users')
+      .update({ unlocked_categories: merged })
+      .eq('id', userId)
+    if (error) console.error('[saveUnlockedCategories] update failed:', error.message)
+  } else {
+    const { error } = await supabase
+      .from('users')
+      .insert({ id: userId, display_name: `Player${Math.floor(Math.random() * 9999)}`, unlocked_categories: merged })
+    if (error) console.error('[saveUnlockedCategories] insert failed:', error.message)
   }
 
-  const current: string[] = (data?.unlocked_categories as string[]) ?? []
-  if (current.includes(categoryId)) return
-
-  const { error } = await supabase
-    .from('users')
-    .update({ unlocked_categories: [...current, categoryId] })
-    .eq('id', userId)
-
-  if (error) console.error('[saveUnlockedCategory] update failed:', error.message)
 }
 
 export async function getPathStats(

@@ -29,7 +29,8 @@ const SEED_TEAM_IDS = [
   13357, // Hellfire Club (Marvel, 106 members)
 ]
 
-const DELAY_MS = 1000 // Comic Vine recommends ~1 req/sec
+const DELAY_MS = 1100 // Comic Vine recommends ~1 req/sec
+const BATCH_SIZE = 3  // concurrent character detail fetches
 
 async function sleep(ms: number) {
   return new Promise(r => setTimeout(r, ms))
@@ -138,64 +139,68 @@ export async function fetchComicVineEntities(limit = 500): Promise<Entity[]> {
   console.log(`  [comics] fetching details for ${charIds.length} characters...`)
 
   let fetched = 0
-  for (const charId of charIds) {
-    await sleep(DELAY_MS)
-    const char = await cvFetch<CVCharacter>(`character/4005-${charId}`, {
+
+  // Process in batches of BATCH_SIZE concurrent requests, with a delay between batches
+  for (let i = 0; i < charIds.length; i += BATCH_SIZE) {
+    const batch = charIds.slice(i, i + BATCH_SIZE)
+    await Promise.all(batch.map(charId => cvFetch<CVCharacter>(`character/4005-${charId}`, {
       field_list: 'id,name,count_of_issue_appearances,publisher,teams,creators',
-    })
-    if (!char || char.count_of_issue_appearances < 10) continue
+    }).then(char => {
+      if (!char || char.count_of_issue_appearances < 10) return
 
-    const charEntityId = `cv_char_${charId}`
-    const appearances = char.count_of_issue_appearances
+      const charEntityId = `cv_char_${charId}`
+      const appearances = char.count_of_issue_appearances
 
-    // Add character entity (appearances as sitelinks proxy)
-    entityMap.set(charEntityId, {
-      id: charEntityId,
-      label: char.name,
-      relatedIds: [],
-      sitelinks: Math.round(appearances / 10), // normalize: 1000 appearances ≈ 100 sitelinks
-      entityType: 'character',
-    })
+      // Add character entity (appearances as sitelinks proxy)
+      entityMap.set(charEntityId, {
+        id: charEntityId,
+        label: char.name,
+        relatedIds: [],
+        sitelinks: Math.round(appearances / 10), // normalize: 1000 appearances ≈ 100 sitelinks
+        entityType: 'character',
+      })
 
-    const charEntity = entityMap.get(charEntityId)!
+      const charEntity = entityMap.get(charEntityId)!
 
-    // Link character → teams
-    for (const team of char.teams ?? []) {
-      const teamEntityId = `cv_team_${team.id}`
-      if (!entityMap.has(teamEntityId)) {
-        entityMap.set(teamEntityId, { id: teamEntityId, label: team.name, relatedIds: [], entityType: 'team' })
+      // Link character → teams
+      for (const team of char.teams ?? []) {
+        const teamEntityId = `cv_team_${team.id}`
+        if (!entityMap.has(teamEntityId)) {
+          entityMap.set(teamEntityId, { id: teamEntityId, label: team.name, relatedIds: [], entityType: 'team' })
+        }
+        if (!charEntity.relatedIds.includes(teamEntityId)) charEntity.relatedIds.push(teamEntityId)
+        const teamEntity = entityMap.get(teamEntityId)!
+        if (!teamEntity.relatedIds.includes(charEntityId)) teamEntity.relatedIds.push(charEntityId)
       }
-      if (!charEntity.relatedIds.includes(teamEntityId)) charEntity.relatedIds.push(teamEntityId)
-      const teamEntity = entityMap.get(teamEntityId)!
-      if (!teamEntity.relatedIds.includes(charEntityId)) teamEntity.relatedIds.push(charEntityId)
-    }
 
-    // Link character → publisher
-    if (char.publisher) {
-      const pubEntityId = `cv_pub_${char.publisher.id}`
-      if (!entityMap.has(pubEntityId)) {
-        entityMap.set(pubEntityId, { id: pubEntityId, label: char.publisher.name, relatedIds: [], entityType: 'publisher' })
+      // Link character → publisher
+      if (char.publisher) {
+        const pubEntityId = `cv_pub_${char.publisher.id}`
+        if (!entityMap.has(pubEntityId)) {
+          entityMap.set(pubEntityId, { id: pubEntityId, label: char.publisher.name, relatedIds: [], entityType: 'publisher' })
+        }
+        if (!charEntity.relatedIds.includes(pubEntityId)) charEntity.relatedIds.push(pubEntityId)
+        const pubEntity = entityMap.get(pubEntityId)!
+        if (!pubEntity.relatedIds.includes(charEntityId)) pubEntity.relatedIds.push(charEntityId)
       }
-      if (!charEntity.relatedIds.includes(pubEntityId)) charEntity.relatedIds.push(pubEntityId)
-      const pubEntity = entityMap.get(pubEntityId)!
-      if (!pubEntity.relatedIds.includes(charEntityId)) pubEntity.relatedIds.push(charEntityId)
-    }
 
-    // Link character → creators
-    for (const creator of char.creators ?? []) {
-      const creatorEntityId = `cv_creator_${creator.id}`
-      if (!entityMap.has(creatorEntityId)) {
-        entityMap.set(creatorEntityId, { id: creatorEntityId, label: creator.name, relatedIds: [], entityType: 'person' })
+      // Link character → creators
+      for (const creator of char.creators ?? []) {
+        const creatorEntityId = `cv_creator_${creator.id}`
+        if (!entityMap.has(creatorEntityId)) {
+          entityMap.set(creatorEntityId, { id: creatorEntityId, label: creator.name, relatedIds: [], entityType: 'person' })
+        }
+        if (!charEntity.relatedIds.includes(creatorEntityId)) charEntity.relatedIds.push(creatorEntityId)
+        const creatorEntity = entityMap.get(creatorEntityId)!
+        if (!creatorEntity.relatedIds.includes(charEntityId)) creatorEntity.relatedIds.push(charEntityId)
       }
-      if (!charEntity.relatedIds.includes(creatorEntityId)) charEntity.relatedIds.push(creatorEntityId)
-      const creatorEntity = entityMap.get(creatorEntityId)!
-      if (!creatorEntity.relatedIds.includes(charEntityId)) creatorEntity.relatedIds.push(charEntityId)
-    }
 
-    fetched++
-    if (fetched % 20 === 0) {
-      process.stdout.write(`\r  [comics] ${fetched}/${charIds.length} characters fetched`)
-    }
+      fetched++
+    })))
+
+    process.stdout.write(`\r  [comics] ${Math.min(i + BATCH_SIZE, charIds.length)}/${charIds.length} characters fetched`)
+    // Wait between batches to respect rate limit (1 req/sec across all concurrent requests)
+    if (i + BATCH_SIZE < charIds.length) await sleep(DELAY_MS * BATCH_SIZE)
   }
 
   console.log(`\n  [comics] built graph: ${entityMap.size} total entities`)

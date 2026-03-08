@@ -48,6 +48,7 @@ export function PuzzleCanvas({
   const [hoveringId, setHoveringId] = useState<string | null>(null)
   const [lastConnectedId, setLastConnectedId] = useState<string | null>(null)
   const [rippleCenter, setRippleCenter] = useState<{ x: number; y: number } | null>(null)
+  const [settledIds, setSettledIds] = useState<Set<string>>(new Set())
 
   const activePathRef = useRef<string[]>([])
   const isTracingRef = useRef(false)
@@ -98,9 +99,16 @@ export function PuzzleCanvas({
     const existingIndex = currentPath.indexOf(bubble.id)
 
     if (existingIndex !== -1) {
-      activePathRef.current = currentPath.slice(0, existingIndex + 1)
-      setActivePath(activePathRef.current)
-      onPathChangeRef.current?.(activePathRef.current)
+      const trimmed = currentPath.slice(0, existingIndex + 1)
+      activePathRef.current = trimmed
+      setActivePath(trimmed)
+      onPathChangeRef.current?.(trimmed)
+      // Remove settled state for bubbles trimmed off the path
+      setSettledIds(prev => {
+        const next = new Set(prev)
+        currentPath.slice(existingIndex + 1).forEach(id => next.delete(id))
+        return next
+      })
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
     } else {
       // Block landing on end node until minimum hops are reached
@@ -113,6 +121,11 @@ export function PuzzleCanvas({
       setActivePath(newPath)
       onPathChangeRef.current?.(newPath)
       setLastConnectedId(bubble.id)
+      // Settle the outline after the line has drawn (~150ms)
+      const connectedId = bubble.id
+      setTimeout(() => {
+        setSettledIds(prev => new Set(prev).add(connectedId))
+      }, 150)
       if (bubble.id === endIdRef.current) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
       } else {
@@ -143,6 +156,7 @@ export function PuzzleCanvas({
             setActivePath([])
             onPathChangeRef.current?.([])
             setLastConnectedId(null)
+            setSettledIds(new Set())
             isTracingRef.current = false
           }
           return
@@ -203,7 +217,10 @@ export function PuzzleCanvas({
         if (path[path.length - 1] === endIdRef.current) {
           const endBubble = bubblesRef.current.find(b => b.id === endIdRef.current)
           if (endBubble) setRippleCenter(endBubble.position)
-          onPathCompleteRef.current(path)
+          // Freeze on completed path for 600ms so player can admire it, then navigate
+          setTimeout(() => {
+            onPathCompleteRef.current(path)
+          }, 600)
         }
       },
       onPanResponderTerminate: () => {
@@ -217,7 +234,7 @@ export function PuzzleCanvas({
   function getBubbleState(id: string): BubbleState {
     if (id === startId) return 'start'
     if (id === endId) return 'end'
-    if (activePath.includes(id)) return 'active'
+    if (activePath.includes(id) && settledIds.has(id)) return 'active'
     if (id === hoveringId) return 'active'
     return 'idle'
   }
@@ -269,6 +286,7 @@ export function PuzzleCanvas({
           position={bubble.position}
           index={i}
           pulse={bubble.id === lastConnectedId}
+          hovering={bubble.id === hoveringId}
         />
       ))}
 

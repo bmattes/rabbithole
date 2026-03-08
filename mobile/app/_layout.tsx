@@ -17,7 +17,7 @@ function RedirectToOnboarding() {
   useEffect(() => {
     if (authLoading || progression.loading) return
     if (userId && progression.unlockedCategories.length === 0) {
-      router.replace('/onboarding')
+      router.replace('/howtoplay')
     }
   }, [authLoading, progression.loading, userId, progression.unlockedCategories.length])
 
@@ -29,6 +29,7 @@ export default function RootLayout() {
     <View style={styles.root}>
       <Stack screenOptions={{ headerShown: false }} initialRouteName="(tabs)">
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="howtoplay" />
         <Stack.Screen name="onboarding" />
         <Stack.Screen name="puzzle/[id]" />
         <Stack.Screen name="results/[id]" />
