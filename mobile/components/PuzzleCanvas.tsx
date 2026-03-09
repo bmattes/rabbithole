@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { View, Text, StyleSheet, Dimensions, PanResponder } from 'react-native'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { View, Text, StyleSheet, Dimensions, PanResponder, Animated } from 'react-native'
 import * as Haptics from 'expo-haptics'
 import { Bubble, BUBBLE_W, BUBBLE_H, BubbleState } from './Bubble'
 import { ConnectionLine } from './ConnectionLine'
@@ -64,6 +64,31 @@ export function PuzzleCanvas({
   const [hintLabel, setHintLabel] = useState<string | null>(null)
   const [hintPos, setHintPos] = useState<{ x: number; y: number } | null>(null)
   const [flashActivePath, setFlashActivePath] = useState<string[]>([])
+
+  // Animated positions for shuffle animation — keyed by bubble id
+  const animatedPositions = useMemo(() => {
+    const map = new Map<string, Animated.ValueXY>()
+    for (const b of bubbles) {
+      map.set(b.id, new Animated.ValueXY({ x: b.position.x, y: b.position.y }))
+    }
+    return map
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bubbles.map(b => b.id).join(',')])
+
+  // When bubble positions change (shuffle), spring each bubble to its new position
+  useEffect(() => {
+    const animations = bubbles.map(b => {
+      const av = animatedPositions.get(b.id)
+      if (!av) return null
+      return Animated.spring(av, {
+        toValue: { x: b.position.x, y: b.position.y },
+        damping: 14,
+        stiffness: 120,
+        useNativeDriver: false,
+      })
+    }).filter(Boolean) as Animated.CompositeAnimation[]
+    if (animations.length > 0) Animated.parallel(animations).start()
+  }, [bubbles])
 
   const activePathRef = useRef<string[]>([])
   const isTracingRef = useRef(false)
@@ -388,6 +413,7 @@ export function PuzzleCanvas({
           index={i}
           pulse={bubble.id === lastConnectedId}
           hovering={bubble.id === hoveringId}
+          animatedPosition={animatedPositions.get(bubble.id)}
         />
       ))}
 

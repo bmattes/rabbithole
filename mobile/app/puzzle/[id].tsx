@@ -140,14 +140,13 @@ export default function PuzzleScreen() {
       const base = shuffledBubbles ?? layoutBubbles
       const n = base.length
       const fixed = new Set([0, n - 1])
-      const newPositions = base.map((b, i) => {
-        if (fixed.has(i)) return b.position
-        return {
-          x: 60 + Math.random() * (SW - 120),
-          y: 150 + Math.random() * (Math.max(canvasHeight - 230, 100)),
-        }
+      // Use random seed positions, then run separateBubbles to guarantee no overlaps
+      const randomised = base.map((b, i) => fixed.has(i) ? b.position : {
+        x: 60 + Math.random() * (SW - 120),
+        y: 150 + Math.random() * (Math.max(canvasHeight - 230, 100)),
       })
-      setShuffledBubbles(base.map((b, i) => ({ ...b, position: newPositions[i] })))
+      const separated = separateBubbles(randomised, SW, canvasHeight, fixed)
+      setShuffledBubbles(base.map((b, i) => ({ ...b, position: separated[i] })))
       setActiveHint(null)
     }
 

@@ -1,5 +1,5 @@
-import React from 'react'
-import { View, Text, Pressable, StyleSheet } from 'react-native'
+import React, { useRef } from 'react'
+import { View, Text, Pressable, StyleSheet, Animated } from 'react-native'
 import { colors } from '../lib/theme'
 
 export type HintType = 'connection' | 'shuffle' | 'flash' | 'bridge'
@@ -20,6 +20,21 @@ const HINTS: Array<{ type: HintType; label: string; icon: string }> = [
 
 export function HintTray({ hintsRemaining, activeHint, onUseHint, connectionAvailable }: HintTrayProps) {
   const depleted = hintsRemaining === 0
+  const scaleRefs = useRef<Record<HintType, Animated.Value>>({
+    connection: new Animated.Value(1),
+    shuffle: new Animated.Value(1),
+    flash: new Animated.Value(1),
+    bridge: new Animated.Value(1),
+  }).current
+
+  function handlePress(type: HintType) {
+    // Bounce the button immediately as feedback, then call onUseHint
+    Animated.sequence([
+      Animated.spring(scaleRefs[type], { toValue: 1.25, useNativeDriver: true, damping: 4, stiffness: 400 }),
+      Animated.spring(scaleRefs[type], { toValue: 1, useNativeDriver: true, damping: 10, stiffness: 200 }),
+    ]).start()
+    onUseHint(type)
+  }
 
   return (
     <View style={styles.tray}>
@@ -38,15 +53,16 @@ export function HintTray({ hintsRemaining, activeHint, onUseHint, connectionAvai
             || (activeHint !== null && !isActive)
             || (h.type === 'connection' && !connectionAvailable)
           return (
-            <Pressable
-              key={h.type}
-              style={[styles.btn, isActive && styles.btnActive, disabled && styles.btnDisabled]}
-              onPress={() => !disabled && onUseHint(h.type)}
-              disabled={disabled}
-            >
-              <Text style={styles.btnIcon}>{h.icon}</Text>
-              <Text style={[styles.btnLabel, disabled && styles.btnLabelDisabled]}>{h.label}</Text>
-            </Pressable>
+            <Animated.View key={h.type} style={{ flex: 1, transform: [{ scale: scaleRefs[h.type] }] }}>
+              <Pressable
+                style={[styles.btn, isActive && styles.btnActive, disabled && styles.btnDisabled]}
+                onPress={() => !disabled && handlePress(h.type)}
+                disabled={disabled}
+              >
+                <Text style={styles.btnIcon}>{h.icon}</Text>
+                <Text style={[styles.btnLabel, disabled && styles.btnLabelDisabled]}>{h.label}</Text>
+              </Pressable>
+            </Animated.View>
           )
         })}
       </View>
@@ -72,6 +88,7 @@ const styles = StyleSheet.create({
   btn: {
     flex: 1,
     alignItems: 'center',
+    width: '100%',
     paddingVertical: 8,
     borderRadius: 10,
     backgroundColor: colors.bg,
