@@ -10,6 +10,9 @@ import { computeScore } from '../../lib/scoring'
 import { submitRun } from '../../lib/api'
 import { separateBubbles } from '../../lib/bubbleLayout'
 import { colors } from '../../lib/theme'
+import { useHints } from '../../hooks/useHints'
+import { HintTray, HintType } from '../../components/HintTray'
+import * as Haptics from 'expo-haptics'
 
 
 const DOMAIN_HINTS: Record<string, string> = {
@@ -21,6 +24,27 @@ const DOMAIN_HINTS: Record<string, string> = {
 }
 
 const { width: SW } = Dimensions.get('window')
+
+function buildFakePaths(
+  realPath: string[],
+  allIds: string[],
+  connections: Record<string, string[]>,
+  count: number
+): string[][] {
+  const results: string[][] = []
+  for (let i = 0; i < count; i++) {
+    const start = allIds[Math.floor(Math.random() * allIds.length)]
+    const path = [start]
+    for (let step = 1; step < realPath.length; step++) {
+      const current = path[path.length - 1]
+      const neighbors = (connections[current] ?? []).filter(n => !path.includes(n))
+      if (neighbors.length === 0) break
+      path.push(neighbors[Math.floor(Math.random() * neighbors.length)])
+    }
+    if (path.length >= 2) results.push(path)
+  }
+  return results
+}
 
 export default function PuzzleScreen() {
   const { id: categoryId, categoryName } = useLocalSearchParams<{ id: string; categoryName?: string }>()
@@ -34,6 +58,12 @@ export default function PuzzleScreen() {
   const [currentHops, setCurrentHops] = useState(0)
   const [canvasHeight, setCanvasHeight] = useState(0)
   const canvasHeightSetRef = useRef(false)
+
+  const { hintsRemaining, useHint } = useHints(userId)
+  const [activeHint, setActiveHint] = useState<HintType | null>(null)
+  const [bridgeNodeId, setBridgeNodeId] = useState<string | null>(null)
+  const [flashPaths, setFlashPaths] = useState<string[][] | null>(null)
+  const [shuffledBubbles, setShuffledBubbles] = useState<typeof layoutBubbles | null>(null)
 
   const puzzle = livePuzzle
   const domain = puzzle?.domain
@@ -91,6 +121,49 @@ export default function PuzzleScreen() {
     )
   }
 
+  async function handleUseHint(type: HintType) {
+    const ok = await useHint()
+    if (!ok) return
+
+    if (type === 'connection') {
+      setActiveHint('connection')
+    }
+
+    if (type === 'shuffle') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy)
+      const base = shuffledBubbles ?? layoutBubbles
+      const n = base.length
+      const fixed = new Set([0, n - 1])
+      const newPositions = base.map((b, i) => {
+        if (fixed.has(i)) return b.position
+        return {
+          x: 60 + Math.random() * (SW - 120),
+          y: 150 + Math.random() * (Math.max(canvasHeight - 230, 100)),
+        }
+      })
+      setShuffledBubbles(base.map((b, i) => ({ ...b, position: newPositions[i] })))
+      setActiveHint(null)
+    }
+
+    if (type === 'flash') {
+      const realPath = puzzle!.optimal_path
+      const allBubbleIds = (shuffledBubbles ?? layoutBubbles).map(b => b.id)
+      const fakePaths = buildFakePaths(realPath, allBubbleIds, puzzle!.connections, 2)
+      const allPaths = [...fakePaths, realPath].sort(() => Math.random() - 0.5)
+      setFlashPaths(allPaths)
+      setActiveHint('flash')
+    }
+
+    if (type === 'bridge') {
+      const intermediates = puzzle!.optimal_path.slice(1, -1)
+      if (intermediates.length > 0) {
+        const pick = intermediates[Math.floor(Math.random() * intermediates.length)]
+        setBridgeNodeId(pick)
+      }
+      setActiveHint(null)
+    }
+  }
+
   const timerColor = elapsed < 60000 ? colors.textPrimary : elapsed < 180000 ? '#d97706' : '#dc2626'
   const minutes = Math.floor(elapsed / 60000)
   const seconds = String(Math.floor((elapsed % 60000) / 1000)).padStart(2, '0')
@@ -124,7 +197,7 @@ export default function PuzzleScreen() {
         </View>
       </View>
       <PuzzleCanvas
-        bubbles={layoutBubbles}
+        bubbles={shuffledBubbles ?? layoutBubbles}
         connections={puzzle.connections}
         startId={puzzle.bubbles[0]?.id}
         endId={puzzle.bubbles[puzzle.bubbles.length - 1]?.id}
@@ -138,6 +211,17 @@ export default function PuzzleScreen() {
             setCanvasHeight(h)
           }
         }}
+        connectionModeActive={activeHint === 'connection'}
+        onConnectionModeUsed={() => setActiveHint(null)}
+        bridgeNodeId={bridgeNodeId}
+        flashPaths={flashPaths}
+        onFlashComplete={() => { setFlashPaths(null); setActiveHint(null) }}
+      />
+      <HintTray
+        hintsRemaining={hintsRemaining}
+        activeHint={activeHint}
+        onUseHint={handleUseHint}
+        connectionAvailable={!!(puzzle.edgeLabels && Object.keys(puzzle.edgeLabels).length > 0)}
       />
     </View>
   )
