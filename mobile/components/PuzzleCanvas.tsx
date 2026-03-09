@@ -24,18 +24,56 @@ interface PuzzleCanvasProps {
   edgeLabels?: Record<string, string>
   connectionModeActive?: boolean
   onConnectionModeUsed?: () => void
-  bridgeNodeId?: string | null
+  bridgeNodeIds?: Set<string>
   flashPaths?: string[][] | null
   onFlashComplete?: () => void
+  bubbleScale?: number
+  onBacktrack?: () => void
+  onReset?: () => void
 }
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
 const DWELL_MS = 300
 
-function hitTest(point: { x: number; y: number }, bubble: BubbleData): boolean {
+const PILL_W = 120
+const PILL_H = 28
+
+function bestPillPos(
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  bubbles: BubbleData[]
+): { x: number; y: number } {
+  const mx = (from.x + to.x) / 2
+  const my = (from.y + to.y) / 2
+  // Perpendicular offset direction (rotate the line 90°)
+  const dx = to.x - from.x
+  const dy = to.y - from.y
+  const len = Math.sqrt(dx * dx + dy * dy) || 1
+  const px = -dy / len  // perpendicular unit vector
+  const py = dx / len
+  const OFFSETS = [0, 40, -40, 70, -70]
+  let bestPos = { x: mx, y: my }
+  let bestMinDist = -1
+  for (const offset of OFFSETS) {
+    const cx = mx + px * offset
+    const cy = my + py * offset
+    // Min distance from this candidate to any bubble center
+    const minDist = bubbles.reduce((min, b) => {
+      const d = Math.sqrt((cx - b.position.x) ** 2 + (cy - b.position.y) ** 2)
+      return Math.min(min, d)
+    }, Infinity)
+    if (minDist > bestMinDist) {
+      bestMinDist = minDist
+      bestPos = { x: cx, y: cy }
+    }
+  }
+  return bestPos
+}
+
+function hitTest(point: { x: number; y: number }, bubble: BubbleData, scale = 1): boolean {
   return (
-    Math.abs(point.x - bubble.position.x) <= BUBBLE_W / 2 &&
-    Math.abs(point.y - bubble.position.y) <= BUBBLE_H / 2
+    Math.abs(point.x - bubble.position.x) <= (BUBBLE_W + 40) * scale / 2 &&
+    Math.abs(point.y - bubble.position.y) <= BUBBLE_H * scale / 2
   )
 }
 
@@ -51,9 +89,12 @@ export function PuzzleCanvas({
   edgeLabels,
   connectionModeActive,
   onConnectionModeUsed,
-  bridgeNodeId,
+  bridgeNodeIds,
   flashPaths,
   onFlashComplete,
+  bubbleScale = 1,
+  onBacktrack,
+  onReset,
 }: PuzzleCanvasProps) {
   const [activePath, setActivePath] = useState<string[]>([])
   const [fingerPos, setFingerPos] = useState<{ x: number; y: number } | null>(null)
@@ -63,6 +104,8 @@ export function PuzzleCanvas({
   const [settledIds, setSettledIds] = useState<Set<string>>(new Set())
   const [hintLabel, setHintLabel] = useState<string | null>(null)
   const [hintPos, setHintPos] = useState<{ x: number; y: number } | null>(null)
+  const [hintNodeIds, setHintNodeIds] = useState<[string, string] | null>(null)
+  const pillPersistRef = useRef(false)
   const [flashActivePath, setFlashActivePath] = useState<string[]>([])
 
   // Translate offsets for shuffle animation — each starts at {x:0,y:0} (no offset).
@@ -107,6 +150,8 @@ export function PuzzleCanvas({
   const isTracingRef = useRef(false)
   const onPathCompleteRef = useRef(onPathComplete)
   const onPathChangeRef = useRef(onPathChange)
+  const onBacktrackRef = useRef(onBacktrack)
+  const onResetRef = useRef(onReset)
   const bubblesRef = useRef(bubbles)
   const startIdRef = useRef(startId)
   const endIdRef = useRef(endId)
@@ -114,6 +159,8 @@ export function PuzzleCanvas({
   const minHopsRef = useRef(minHops)
   onPathCompleteRef.current = onPathComplete
   onPathChangeRef.current = onPathChange
+  onBacktrackRef.current = onBacktrack
+  onResetRef.current = onReset
   bubblesRef.current = bubbles
   startIdRef.current = startId
   endIdRef.current = endId
@@ -129,6 +176,8 @@ export function PuzzleCanvas({
   onConnectionModeUsedRef.current = onConnectionModeUsed
   const onFlashCompleteRef = useRef(onFlashComplete)
   onFlashCompleteRef.current = onFlashComplete
+  const bubbleScaleRef = useRef(bubbleScale)
+  bubbleScaleRef.current = bubbleScale
 
   const dwellBubbleRef = useRef<string | null>(null)
   const dwellTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -158,6 +207,15 @@ export function PuzzleCanvas({
   }
 
   useEffect(() => {
+    if (!hintNodeIds || !hintLabel) return
+    const from = getBubble(hintNodeIds[0])
+    const to = getBubble(hintNodeIds[1])
+    if (from && to) {
+      setHintPos(bestPillPos(from.position, to.position, bubbles))
+    }
+  }, [bubbles])
+
+  useEffect(() => {
     if (!flashPaths || flashPaths.length === 0) {
       setFlashActivePath([])
       return
@@ -178,13 +236,6 @@ export function PuzzleCanvas({
     return () => { cancelled = true; setFlashActivePath([]) }
   }, [flashPaths])
 
-  useEffect(() => {
-    if (!connectionModeActive) {
-      setHintLabel(null)
-      setHintPos(null)
-    }
-  }, [connectionModeActive])
-
   const connectBubbleRef = useRef((bubble: BubbleData) => {
     const currentPath = activePathRef.current
     const existingIndex = currentPath.indexOf(bubble.id)
@@ -201,9 +252,12 @@ export function PuzzleCanvas({
         return next
       })
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+      onBacktrackRef.current?.()
     } else {
       // Block landing on end node until minimum hops are reached
-      if (bubble.id === endIdRef.current && currentPath.length - 1 < minHopsRef.current) {
+      // currentPath includes start; adding end makes total hops = currentPath.length
+      // so we need currentPath.length >= minHops before allowing end
+      if (bubble.id === endIdRef.current && currentPath.length < minHopsRef.current) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
         return
       }
@@ -223,6 +277,7 @@ export function PuzzleCanvas({
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy)
       }
       if (connectionModeActiveRef.current) {
+        pillPersistRef.current = true
         onConnectionModeUsedRef.current?.()
       }
     }
@@ -236,6 +291,7 @@ export function PuzzleCanvas({
       onMoveShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponderCapture: () => true,
       onPanResponderGrant: (evt) => {
+        pillPersistRef.current = false
         setHintLabel(null)
         setHintPos(null)
         const { pageX, pageY } = evt.nativeEvent
@@ -244,22 +300,24 @@ export function PuzzleCanvas({
 
         if (currentPath.length > 0) {
           const checkpoint = getBubble(currentPath[currentPath.length - 1])
-          if (checkpoint && hitTest({ x, y }, checkpoint)) {
+          if (checkpoint && hitTest({ x, y }, checkpoint, bubbleScaleRef.current)) {
             isTracingRef.current = true
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
           } else {
+            const hadPath = activePathRef.current.length > 1
             activePathRef.current = []
             setActivePath([])
             onPathChangeRef.current?.([])
             setLastConnectedId(null)
             setSettledIds(new Set())
             isTracingRef.current = false
+            if (hadPath) onResetRef.current?.()
           }
           return
         }
 
         const start = getBubble(startIdRef.current)
-        if (!start || !hitTest({ x, y }, start)) return
+        if (!start || !hitTest({ x, y }, start, bubbleScaleRef.current)) return
         isTracingRef.current = true
         activePathRef.current = [startIdRef.current]
         setActivePath([startIdRef.current])
@@ -278,7 +336,7 @@ export function PuzzleCanvas({
 
         let overBubble: BubbleData | null = null
         for (const bubble of bubblesRef.current) {
-          if (hitTest({ x, y }, bubble) && bubble.id !== lastId) {
+          if (hitTest({ x, y }, bubble, bubbleScaleRef.current) && bubble.id !== lastId) {
             overBubble = bubble
             break
           }
@@ -304,10 +362,8 @@ export function PuzzleCanvas({
           const tipBubbleData = bubblesRef.current.find(b => b.id === tipId)
           if (label && tipBubbleData) {
             setHintLabel(label)
-            setHintPos({
-              x: (tipBubbleData.position.x + overBubble.position.x) / 2,
-              y: (tipBubbleData.position.y + overBubble.position.y) / 2,
-            })
+            setHintPos(bestPillPos(tipBubbleData.position, overBubble.position, bubblesRef.current))
+            setHintNodeIds([tipId, overBubble.id])
           } else {
             setHintLabel(null)
             setHintPos(null)
@@ -316,6 +372,13 @@ export function PuzzleCanvas({
           setHintLabel(null)
           setHintPos(null)
         }
+
+        // In Connection mode, block dwell on nodes not connected to current tip
+        const lastIdForCheck = activePathRef.current[activePathRef.current.length - 1]
+        const isValidNeighbor = !connectionModeActiveRef.current
+          || (connectionsRef.current[lastIdForCheck] ?? []).includes(overBubble.id)
+          || activePathRef.current.includes(overBubble.id) // allow backtracking
+        if (!isValidNeighbor) return
 
         const capturedBubble = overBubble
         dwellTimerRef.current = setTimeout(() => {
@@ -328,8 +391,10 @@ export function PuzzleCanvas({
       onPanResponderRelease: () => {
         clearDwell()
         setFingerPos(null)
-        setHintLabel(null)
-        setHintPos(null)
+        if (!pillPersistRef.current) {
+          setHintLabel(null)
+          setHintPos(null)
+        }
         isTracingRef.current = false
 
         const path = activePathRef.current
@@ -345,8 +410,10 @@ export function PuzzleCanvas({
       onPanResponderTerminate: () => {
         clearDwell()
         setFingerPos(null)
-        setHintLabel(null)
-        setHintPos(null)
+        if (!pillPersistRef.current) {
+          setHintLabel(null)
+          setHintPos(null)
+        }
         isTracingRef.current = false
       },
     })
@@ -355,7 +422,8 @@ export function PuzzleCanvas({
   function getBubbleState(id: string): BubbleState {
     if (id === startId) return 'start'
     if (id === endId) return 'end'
-    if (id === bridgeNodeId) return 'bridge'
+    if (bridgeNodeIds?.has(id)) return 'bridge'
+    if (flashActivePath.length > 0 && flashActivePath.includes(id)) return 'flash'
     if (activePath.includes(id) && settledIds.has(id)) return 'active'
     if (id === hoveringId) return 'active'
     return 'idle'
@@ -375,23 +443,6 @@ export function PuzzleCanvas({
       }}
       {...panResponder.panHandlers}
     >
-      {flashActivePath.length > 1 && flashActivePath.slice(0, -1).map((id, i) => {
-        const from = getBubble(id)
-        const to = getBubble(flashActivePath[i + 1])
-        if (!from || !to) return null
-        return (
-          <ConnectionLine
-            key={`flash-${id}-${flashActivePath[i + 1]}`}
-            from={from.position}
-            to={to.position}
-            active
-            flash
-            width={SCREEN_WIDTH}
-            height={SCREEN_HEIGHT}
-          />
-        )
-      })}
-
       {activePath.slice(0, -1).map((id, i) => {
         const from = getBubble(id)
         const to = getBubble(activePath[i + 1])
@@ -431,8 +482,26 @@ export function PuzzleCanvas({
               index={i}
               pulse={bubble.id === lastConnectedId}
               hovering={bubble.id === hoveringId}
+              bubbleScale={bubbleScale}
             />
           </Animated.View>
+        )
+      })}
+
+      {flashActivePath.length > 1 && flashActivePath.slice(0, -1).map((id, i) => {
+        const from = getBubble(id)
+        const to = getBubble(flashActivePath[i + 1])
+        if (!from || !to) return null
+        return (
+          <ConnectionLine
+            key={`flash-${id}-${flashActivePath[i + 1]}`}
+            from={from.position}
+            to={to.position}
+            active
+            flash
+            width={SCREEN_WIDTH}
+            height={SCREEN_HEIGHT}
+          />
         )
       })}
 
