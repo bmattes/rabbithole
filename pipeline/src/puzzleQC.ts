@@ -196,13 +196,17 @@ Category: "${categoryName}" | Difficulty: ${difficulty} | Connections are via: $
 Puzzle path to evaluate:
 ${pathStr}
 
+FIRST — check that every node in the path actually belongs in the "${categoryName}" category. A node that is clearly from a different domain (e.g. a geography place in a TV puzzle, a sports team in a music puzzle) is an immediate disqualifier regardless of its connections.
+
 For each hop (A → B), ask:
-1. Is the connection KNOWABLE to someone at this experience level? Would they recognise that A and B are connected via ${connectionType}?
-2. Is the connection appropriately CHALLENGING for ${difficulty} difficulty? Or is it trivially obvious / impossibly obscure?
-3. Is the intermediate node SPECIFIC? Or so generic/abstract it could connect to almost anything?
-4. Are any node labels AMBIGUOUS? (e.g. a real name instead of a stage name, or could refer to multiple things)
+1. Does each node BELONG in the "${categoryName}" category? Or is it clearly from a different domain entirely?
+2. Is the connection KNOWABLE to someone at this experience level? Would they recognise that A and B are connected via ${connectionType}?
+3. Is the connection appropriately CHALLENGING for ${difficulty} difficulty? Or is it trivially obvious / impossibly obscure?
+4. Is the intermediate node SPECIFIC? Or so generic/abstract it could connect to almost anything?
+5. Are any node labels AMBIGUOUS? (e.g. a real name instead of a stage name, or could refer to multiple things)
 
 Rate each hop 1-10 for knowability at this difficulty level. Flag issues:
+- "wrong_domain" if a node clearly does not belong in the ${categoryName} category (e.g. a place name in a TV puzzle) — this should score 1 and fail the puzzle
 - "obscure" if the connection is not well-known enough for this audience
 - "too_easy" if the connection is so obvious it offers no challenge for this difficulty
 - "ambiguous" if a label could refer to multiple things or uses an unfamiliar name form
@@ -239,7 +243,8 @@ Pass if overall_score >= 7 AND no hop scores below 4. Also fail if this is a har
 
   const score = parsed.overall_score
   const minHopScore = Math.min(...parsed.hops.map((h: any) => h.knowability ?? 10))
-  const pass = score >= 7 && minHopScore >= 4 && !(difficulty === 'hard' && score >= 9)
+  const hasWrongDomain = parsed.hops.some((h: any) => h.issue === 'wrong_domain')
+  const pass = !hasWrongDomain && score >= 7 && minHopScore >= 4 && !(difficulty === 'hard' && score >= 9)
 
   return {
     pass,
