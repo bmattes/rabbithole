@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 
 const DAILY_HINT_LIMIT = 3
@@ -8,13 +8,22 @@ function localDateString(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-export function useHints(userId: string | null) {
+export interface HintsState {
+  hintsRemaining: number
+  loading: boolean
+  useHint: () => Promise<boolean>
+  refresh: () => void
+}
+
+export function useHints(userId: string | null): HintsState {
   const [hintsUsed, setHintsUsed] = useState(0)
   const [loading, setLoading] = useState(true)
-  const today = localDateString()
+  const today = useMemo(() => localDateString(), [])
+  const inFlightRef = useRef(false)
 
   const load = useCallback(async () => {
     if (!userId) { setLoading(false); return }
+    setLoading(true)
     const { data } = await supabase
       .from('hint_usages')
       .select('hints_used')
@@ -28,12 +37,14 @@ export function useHints(userId: string | null) {
   useEffect(() => { load() }, [load])
 
   const useHint = useCallback(async (): Promise<boolean> => {
-    if (!userId || hintsUsed >= DAILY_HINT_LIMIT) return false
+    if (!userId || hintsUsed >= DAILY_HINT_LIMIT || inFlightRef.current) return false
+    inFlightRef.current = true
     const next = hintsUsed + 1
     setHintsUsed(next)  // optimistic update
     const { error } = await supabase
       .from('hint_usages')
       .upsert({ user_id: userId, usage_date: today, hints_used: next }, { onConflict: 'user_id,usage_date' })
+    inFlightRef.current = false
     if (error) {
       setHintsUsed(hintsUsed)  // revert on error
       return false
@@ -45,5 +56,6 @@ export function useHints(userId: string | null) {
     hintsRemaining: Math.max(0, DAILY_HINT_LIMIT - hintsUsed),
     loading,
     useHint,
+    refresh: load,
   }
 }
