@@ -13,6 +13,7 @@ interface ConnectionLineProps {
   to: Point
   active?: boolean
   broken?: boolean
+  flash?: boolean
   width: number
   height: number
 }
@@ -54,7 +55,7 @@ function cubicBezierPath(from: Point, to: Point): string {
   return `M ${from.x} ${from.y} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${to.x} ${to.y}`
 }
 
-export function ConnectionLine({ from, to, active, broken, width, height }: ConnectionLineProps) {
+export function ConnectionLine({ from, to, active, broken, flash, width, height }: ConnectionLineProps) {
   const color = broken ? '#ef4444' : active ? '#7c3aed' : 'rgba(0,0,0,0.15)'
   const dashed = broken ? '8,4' : !active ? '5,5' : undefined
   const f = nudge(from, to)
@@ -68,7 +69,7 @@ export function ConnectionLine({ from, to, active, broken, width, height }: Conn
             {/* Glow layer — wide blurred stroke behind */}
             <Path
               d={d}
-              stroke="#7c3aed"
+              stroke={flash ? '#f59e0b' : '#7c3aed'}
               strokeWidth={10}
               fill="none"
               opacity={0.25}
@@ -77,7 +78,7 @@ export function ConnectionLine({ from, to, active, broken, width, height }: Conn
             {/* Core line */}
             <Path
               d={d}
-              stroke="#7c3aed"
+              stroke={flash ? '#f59e0b' : '#7c3aed'}
               strokeWidth={4}
               fill="none"
               strokeLinecap="round"

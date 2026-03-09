@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { View, Text, StyleSheet, Dimensions, PanResponder } from 'react-native'
 import * as Haptics from 'expo-haptics'
 import { Bubble, BUBBLE_W, BUBBLE_H, BubbleState } from './Bubble'
@@ -63,6 +63,7 @@ export function PuzzleCanvas({
   const [settledIds, setSettledIds] = useState<Set<string>>(new Set())
   const [hintLabel, setHintLabel] = useState<string | null>(null)
   const [hintPos, setHintPos] = useState<{ x: number; y: number } | null>(null)
+  const [flashActivePath, setFlashActivePath] = useState<string[]>([])
 
   const activePathRef = useRef<string[]>([])
   const isTracingRef = useRef(false)
@@ -115,6 +116,27 @@ export function PuzzleCanvas({
     dwellBubbleRef.current = null
     setHoveringId(null)
   }
+
+  useEffect(() => {
+    if (!flashPaths || flashPaths.length === 0) {
+      setFlashActivePath([])
+      return
+    }
+    let cancelled = false
+    async function runFlash() {
+      for (const path of flashPaths!) {
+        if (cancelled) return
+        setFlashActivePath(path)
+        await new Promise(r => setTimeout(r, 400))
+        if (cancelled) return
+        setFlashActivePath([])
+        await new Promise(r => setTimeout(r, 150))
+      }
+      if (!cancelled) onFlashComplete?.()
+    }
+    runFlash()
+    return () => { cancelled = true; setFlashActivePath([]) }
+  }, [flashPaths])
 
   const connectBubbleRef = useRef((bubble: BubbleData) => {
     const currentPath = activePathRef.current
@@ -303,6 +325,23 @@ export function PuzzleCanvas({
       }}
       {...panResponder.panHandlers}
     >
+      {flashActivePath.length > 1 && flashActivePath.slice(0, -1).map((id, i) => {
+        const from = getBubble(id)
+        const to = getBubble(flashActivePath[i + 1])
+        if (!from || !to) return null
+        return (
+          <ConnectionLine
+            key={`flash-${id}-${flashActivePath[i + 1]}`}
+            from={from.position}
+            to={to.position}
+            active
+            flash
+            width={SCREEN_WIDTH}
+            height={SCREEN_HEIGHT}
+          />
+        )
+      })}
+
       {activePath.slice(0, -1).map((id, i) => {
         const from = getBubble(id)
         const to = getBubble(activePath[i + 1])
