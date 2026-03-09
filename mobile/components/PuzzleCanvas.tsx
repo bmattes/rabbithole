@@ -140,6 +140,13 @@ export function PuzzleCanvas({
     return () => { cancelled = true; setFlashActivePath([]) }
   }, [flashPaths])
 
+  useEffect(() => {
+    if (!connectionModeActive) {
+      setHintLabel(null)
+      setHintPos(null)
+    }
+  }, [connectionModeActive])
+
   const connectBubbleRef = useRef((bubble: BubbleData) => {
     const currentPath = activePathRef.current
     const existingIndex = currentPath.indexOf(bubble.id)
@@ -251,9 +258,9 @@ export function PuzzleCanvas({
         setHoveringId(overBubble.id)
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
 
-        // Show hint pill for the edge label (any connected bubble, not just optimal path)
+        // Hint pill only shows when Connection mode is active
         const tipId = activePathRef.current[activePathRef.current.length - 1]
-        if (tipId) {
+        if (tipId && connectionModeActiveRef.current) {
           const labels = edgeLabelsRef.current
           const label = labels?.[`${tipId}|${overBubble.id}`] ?? labels?.[`${overBubble.id}|${tipId}`] ?? null
           const tipBubbleData = bubblesRef.current.find(b => b.id === tipId)
@@ -267,6 +274,9 @@ export function PuzzleCanvas({
             setHintLabel(null)
             setHintPos(null)
           }
+        } else {
+          setHintLabel(null)
+          setHintPos(null)
         }
 
         const capturedBubble = overBubble
