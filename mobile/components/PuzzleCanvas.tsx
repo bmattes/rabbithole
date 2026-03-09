@@ -22,6 +22,11 @@ interface PuzzleCanvasProps {
   onPathChange?: (path: string[]) => void
   onCanvasLayout?: (height: number) => void
   edgeLabels?: Record<string, string>
+  connectionModeActive?: boolean
+  onConnectionModeUsed?: () => void
+  bridgeNodeId?: string | null
+  flashPaths?: string[][] | null
+  onFlashComplete?: () => void
 }
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
@@ -44,6 +49,11 @@ export function PuzzleCanvas({
   onPathChange,
   onCanvasLayout,
   edgeLabels,
+  connectionModeActive,
+  onConnectionModeUsed,
+  bridgeNodeId,
+  flashPaths,
+  onFlashComplete,
 }: PuzzleCanvasProps) {
   const [activePath, setActivePath] = useState<string[]>([])
   const [fingerPos, setFingerPos] = useState<{ x: number; y: number } | null>(null)
@@ -73,6 +83,11 @@ export function PuzzleCanvas({
 
   const edgeLabelsRef = useRef(edgeLabels)
   edgeLabelsRef.current = edgeLabels
+
+  const connectionModeActiveRef = useRef(connectionModeActive ?? false)
+  connectionModeActiveRef.current = connectionModeActive ?? false
+  const onConnectionModeUsedRef = useRef(onConnectionModeUsed)
+  onConnectionModeUsedRef.current = onConnectionModeUsed
 
   const dwellBubbleRef = useRef<string | null>(null)
   const dwellTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -138,10 +153,11 @@ export function PuzzleCanvas({
       } else {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy)
       }
+      if (connectionModeActiveRef.current) {
+        onConnectionModeUsedRef.current?.()
+      }
     }
     setHoveringId(null)
-    setHintLabel(null)
-    setHintPos(null)
   })
 
   const panResponder = useRef(
@@ -151,6 +167,8 @@ export function PuzzleCanvas({
       onMoveShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponderCapture: () => true,
       onPanResponderGrant: (evt) => {
+        setHintLabel(null)
+        setHintPos(null)
         const { pageX, pageY } = evt.nativeEvent
         const { x, y } = toCanvas(pageX, pageY)
         const currentPath = activePathRef.current
@@ -209,21 +227,18 @@ export function PuzzleCanvas({
         setHoveringId(overBubble.id)
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
 
-        // Show hint pill for the edge label if connected
+        // Show hint pill for the edge label (any connected bubble, not just optimal path)
         const tipId = activePathRef.current[activePathRef.current.length - 1]
         if (tipId) {
-          const isConnected = (connectionsRef.current[tipId] ?? []).includes(overBubble.id)
           const labels = edgeLabelsRef.current
           const label = labels?.[`${tipId}|${overBubble.id}`] ?? labels?.[`${overBubble.id}|${tipId}`] ?? null
-          if (isConnected && label) {
-            const tipBubbleData = bubblesRef.current.find(b => b.id === tipId)
-            if (tipBubbleData) {
-              setHintLabel(label)
-              setHintPos({
-                x: (tipBubbleData.position.x + overBubble.position.x) / 2,
-                y: (tipBubbleData.position.y + overBubble.position.y) / 2,
-              })
-            }
+          const tipBubbleData = bubblesRef.current.find(b => b.id === tipId)
+          if (label && tipBubbleData) {
+            setHintLabel(label)
+            setHintPos({
+              x: (tipBubbleData.position.x + overBubble.position.x) / 2,
+              y: (tipBubbleData.position.y + overBubble.position.y) / 2,
+            })
           } else {
             setHintLabel(null)
             setHintPos(null)
@@ -268,6 +283,7 @@ export function PuzzleCanvas({
   function getBubbleState(id: string): BubbleState {
     if (id === startId) return 'start'
     if (id === endId) return 'end'
+    if (id === bridgeNodeId) return 'bridge'
     if (activePath.includes(id) && settledIds.has(id)) return 'active'
     if (id === hoveringId) return 'active'
     return 'idle'

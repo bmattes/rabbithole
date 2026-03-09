@@ -3,7 +3,7 @@ import { Text, StyleSheet, Animated } from 'react-native'
 import Svg, { Rect } from 'react-native-svg'
 import { colors } from '../lib/theme'
 
-export type BubbleState = 'idle' | 'active' | 'start' | 'end' | 'broken'
+export type BubbleState = 'idle' | 'active' | 'start' | 'end' | 'broken' | 'bridge'
 
 interface BubbleProps {
   label: string
@@ -31,6 +31,7 @@ const TEXT_COLORS: Record<BubbleState, string> = {
   start: '#fff',
   end: '#fff',
   broken: '#ef4444',
+  bridge: '#f59e0b',
 }
 
 // Dwell ring geometry — rounded rect matching the idle bubble shape
@@ -97,6 +98,7 @@ export function Bubble({ label: rawLabel, state, position, index = 0, pulse, hov
         isPill ? [styles.pill, { backgroundColor: PILL_COLORS[state as 'start' | 'end'] }] : styles.textNode,
         state === 'idle' && styles.textNodeIdle,
         state === 'active' && styles.textNodeActive,
+        state === 'bridge' && styles.textNodeBridge,
         {
           width: displayW,
           left: position.x - displayW / 2,
@@ -163,6 +165,12 @@ const styles = StyleSheet.create({
     borderRadius: BUBBLE_H / 2,
     borderWidth: 2,
     borderColor: colors.accent,
+    backgroundColor: 'transparent',
+  },
+  textNodeBridge: {
+    borderRadius: BUBBLE_H / 2,
+    borderWidth: 3,
+    borderColor: '#f59e0b',
     backgroundColor: 'transparent',
   },
   dwellRing: {
