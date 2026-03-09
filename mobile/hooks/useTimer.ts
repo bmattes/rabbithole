@@ -17,7 +17,7 @@ export function useTimer() {
   function stop(): number {
     if (intervalRef.current) clearInterval(intervalRef.current)
     setRunning(false)
-    return elapsed
+    return startRef.current !== null ? Date.now() - startRef.current : elapsed
   }
 
   useEffect(() => () => { if (intervalRef.current) clearInterval(intervalRef.current) }, [])

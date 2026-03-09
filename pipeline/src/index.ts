@@ -48,7 +48,11 @@ const MIN_ANCHOR_FAMILIARITY: Record<Difficulty, number> = {
 }
 
 function filterEntities(entities: any[], domain: CategoryDomain): any[] {
-  const isBad = (e: any) => UNGUESSABLE_TYPES.has(e.entityType) || /^Q\d+$/.test(e.label ?? '')
+  const isBad = (e: any) =>
+    UNGUESSABLE_TYPES.has(e.entityType) ||
+    /^Q\d+$/.test(e.label ?? '') ||
+    // Reject single-word labels >12 chars — almost always non-English place names or malformed labels
+    (!/\s/.test(e.label ?? '') && (e.label ?? '').length > 12)
   const badIds = new Set(entities.filter(isBad).map((e: any) => e.id))
   if (badIds.size === 0) return entities
   console.log(`  [${domain}] stripping ${badIds.size} unguessable/unlabelled bridge nodes`)

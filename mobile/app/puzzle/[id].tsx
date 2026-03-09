@@ -53,8 +53,8 @@ export default function PuzzleScreen() {
   }, [puzzle?.id, canvasHeight])
 
   useEffect(() => {
-    if (puzzle && !started) { start(); setStarted(true) }
-  }, [puzzle])
+    if (layoutBubbles.length > 0 && !started) { start(); setStarted(true) }
+  }, [layoutBubbles.length])
 
   useEffect(() => {
     if (alreadyCompleted) router.replace('/(tabs)')
