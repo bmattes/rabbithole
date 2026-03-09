@@ -131,6 +131,7 @@ export default function PuzzleScreen() {
         minHops={optimalHops}
         onPathComplete={handlePathComplete}
         onPathChange={(path) => setCurrentHops(Math.max(0, path.length - 1))}
+        edgeLabels={puzzle.edgeLabels}
         onCanvasLayout={h => {
           if (!canvasHeightSetRef.current && h > 0) {
             canvasHeightSetRef.current = true

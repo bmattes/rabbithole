@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState } from 'react'
-import { View, StyleSheet, Dimensions, PanResponder } from 'react-native'
+import { View, Text, StyleSheet, Dimensions, PanResponder } from 'react-native'
 import * as Haptics from 'expo-haptics'
 import { Bubble, BUBBLE_W, BUBBLE_H, BubbleState } from './Bubble'
 import { ConnectionLine } from './ConnectionLine'
@@ -21,6 +21,7 @@ interface PuzzleCanvasProps {
   onPathComplete: (path: string[]) => void
   onPathChange?: (path: string[]) => void
   onCanvasLayout?: (height: number) => void
+  edgeLabels?: Record<string, string>
 }
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
@@ -42,6 +43,7 @@ export function PuzzleCanvas({
   onPathComplete,
   onPathChange,
   onCanvasLayout,
+  edgeLabels,
 }: PuzzleCanvasProps) {
   const [activePath, setActivePath] = useState<string[]>([])
   const [fingerPos, setFingerPos] = useState<{ x: number; y: number } | null>(null)
@@ -49,6 +51,8 @@ export function PuzzleCanvas({
   const [lastConnectedId, setLastConnectedId] = useState<string | null>(null)
   const [rippleCenter, setRippleCenter] = useState<{ x: number; y: number } | null>(null)
   const [settledIds, setSettledIds] = useState<Set<string>>(new Set())
+  const [hintLabel, setHintLabel] = useState<string | null>(null)
+  const [hintPos, setHintPos] = useState<{ x: number; y: number } | null>(null)
 
   const activePathRef = useRef<string[]>([])
   const isTracingRef = useRef(false)
@@ -66,6 +70,9 @@ export function PuzzleCanvas({
   endIdRef.current = endId
   connectionsRef.current = connections
   minHopsRef.current = minHops
+
+  const edgeLabelsRef = useRef(edgeLabels)
+  edgeLabelsRef.current = edgeLabels
 
   const dwellBubbleRef = useRef<string | null>(null)
   const dwellTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -133,6 +140,8 @@ export function PuzzleCanvas({
       }
     }
     setHoveringId(null)
+    setHintLabel(null)
+    setHintPos(null)
   })
 
   const panResponder = useRef(
@@ -200,6 +209,27 @@ export function PuzzleCanvas({
         setHoveringId(overBubble.id)
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
 
+        // Show hint pill for the edge label if connected
+        const tipId = activePathRef.current[activePathRef.current.length - 1]
+        if (tipId) {
+          const isConnected = (connectionsRef.current[tipId] ?? []).includes(overBubble.id)
+          const labels = edgeLabelsRef.current
+          const label = labels?.[`${tipId}|${overBubble.id}`] ?? labels?.[`${overBubble.id}|${tipId}`] ?? null
+          if (isConnected && label) {
+            const tipBubbleData = bubblesRef.current.find(b => b.id === tipId)
+            if (tipBubbleData) {
+              setHintLabel(label)
+              setHintPos({
+                x: (tipBubbleData.position.x + overBubble.position.x) / 2,
+                y: (tipBubbleData.position.y + overBubble.position.y) / 2,
+              })
+            }
+          } else {
+            setHintLabel(null)
+            setHintPos(null)
+          }
+        }
+
         const capturedBubble = overBubble
         dwellTimerRef.current = setTimeout(() => {
           if (isTracingRef.current && dwellBubbleRef.current === capturedBubble.id) {
@@ -211,6 +241,8 @@ export function PuzzleCanvas({
       onPanResponderRelease: () => {
         clearDwell()
         setFingerPos(null)
+        setHintLabel(null)
+        setHintPos(null)
         isTracingRef.current = false
 
         const path = activePathRef.current
@@ -226,6 +258,8 @@ export function PuzzleCanvas({
       onPanResponderTerminate: () => {
         clearDwell()
         setFingerPos(null)
+        setHintLabel(null)
+        setHintPos(null)
         isTracingRef.current = false
       },
     })
@@ -290,6 +324,23 @@ export function PuzzleCanvas({
         />
       ))}
 
+      {hintLabel && hintPos && (
+        <View
+          pointerEvents="none"
+          style={[
+            hintStyles.pill,
+            {
+              position: 'absolute',
+              left: hintPos.x,
+              top: hintPos.y,
+              transform: [{ translateX: -60 }, { translateY: -14 }],
+            },
+          ]}
+        >
+          <Text style={hintStyles.text}>{hintLabel}</Text>
+        </View>
+      )}
+
       {rippleCenter && (
         <RippleEffect
           center={rippleCenter}
@@ -302,4 +353,21 @@ export function PuzzleCanvas({
 
 const styles = StyleSheet.create({
   canvas: { flex: 1, backgroundColor: colors.bg },
+})
+
+const hintStyles = StyleSheet.create({
+  pill: {
+    width: 120,
+    backgroundColor: 'rgba(0,0,0,0.72)',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    alignItems: 'center',
+  },
+  text: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.2,
+  },
 })
