@@ -20,7 +20,7 @@ global.fetch = jest.fn().mockResolvedValue({
 
 describe('fetchMovieEntities', () => {
   it('returns entities with labels and related IDs', async () => {
-    const entities = await fetchMovieEntities(10)
+    const { entities } = await fetchMovieEntities(10)
     expect(entities.length).toBeGreaterThan(0)
     expect(entities[0]).toHaveProperty('label')
     expect(entities[0]).toHaveProperty('relatedIds')

@@ -17,7 +17,7 @@ function shuffle<T>(arr: T[]): T[] {
 }
 
 async function main() {
-  const entities = await fetchEntitiesCached('space')
+  const { entities } = await fetchEntitiesCached('space')
   const graph = buildGraph(entities)
   const entityMap = new Map(entities.map(e => [e.id, e]))
 

@@ -43,7 +43,7 @@ function classifyPath(path: string[], entityMap: Map<string, Entity>): string {
 
 async function diagnose(name: string, domain: CategoryDomain, targetDifficulty: string) {
   console.log(`\n=== ${name} / ${targetDifficulty} ===`)
-  const entities = await fetchEntitiesCached(domain)
+  const { entities } = await fetchEntitiesCached(domain)
   const graph = buildGraph(entities)
   const entityMap = new Map(entities.map(e => [e.id, e]))
 

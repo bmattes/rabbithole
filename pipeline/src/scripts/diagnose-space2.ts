@@ -5,7 +5,7 @@ import { fetchEntitiesCached } from '../entityCache'
 import { buildGraph, findShortestPath } from '../graphBuilder'
 
 async function main() {
-  const entities = await fetchEntitiesCached('space')
+  const { entities } = await fetchEntitiesCached('space')
   const graph = buildGraph(entities)
   const entityIds = entities.filter(e => e.relatedIds.length >= 2 && e.label.length <= 30).map(e => e.id)
 

@@ -1,5 +1,10 @@
 import { Entity } from './graphBuilder'
 
+export interface FetchResult {
+  entities: Entity[]
+  edgeLabels: Record<string, string>  // key: "idA|idB", value: label string
+}
+
 const WIKIDATA_ENDPOINT = 'https://query.wikidata.org/sparql'
 
 export type WikidataDomain =
@@ -830,7 +835,7 @@ export async function fetchEntities(
   domain: WikidataDomain,
   limit = 300,
   maxDifficulty: SubqueryDifficulty = 'hard',
-): Promise<Entity[]> {
+): Promise<FetchResult> {
   const allSubqueries = SUBQUERY_MAP[domain]
 
   if (allSubqueries) {
@@ -842,19 +847,28 @@ export async function fetchEntities(
       subqueries.map(tsq => runSparqlQuery(tsq.query(perQuery)).then(bindings => ({ bindings, tsq })))
     )
     const entityMap = new Map<string, Entity>()
+    const edgeLabels: Record<string, string> = {}
     for (const { bindings, tsq } of results) {
       bindingsToEntityMap(bindings, entityMap, tsq.types[0], tsq.types[1])
+      if (tsq.edgeLabel) {
+        for (const binding of bindings) {
+          const aId = extractId(binding.a.value)
+          const bId = extractId(binding.b.value)
+          edgeLabels[`${aId}|${bId}`] = tsq.edgeLabel
+          edgeLabels[`${bId}|${aId}`] = tsq.edgeLabel
+        }
+      }
     }
-    return Array.from(entityMap.values())
+    return { entities: Array.from(entityMap.values()), edgeLabels }
   }
 
   const query = DOMAIN_QUERIES[domain](limit)
   const bindings = await runSparqlQuery(query)
   const [aType, bType] = SINGLE_QUERY_TYPES[domain] ?? [undefined, undefined]
-  return Array.from(bindingsToEntityMap(bindings, undefined, aType, bType).values())
+  return { entities: Array.from(bindingsToEntityMap(bindings, undefined, aType, bType).values()), edgeLabels: {} }
 }
 
-export async function fetchMovieEntities(limit = 200): Promise<Entity[]> {
+export async function fetchMovieEntities(limit = 200): Promise<FetchResult> {
   return fetchEntities('movies', limit)
 }
 

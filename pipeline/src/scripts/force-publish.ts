@@ -52,9 +52,11 @@ function filterEntities(entities: any[]): any[] {
   // Try up to 5 times, keep the best QC score
   let bestPuzzle: any = null, bestScore = 0, bestPath: string[] = []
 
+  let lastEdgeLabels: Record<string, string> = {}
   for (let attempt = 1; attempt <= 5; attempt++) {
-    const entities = await fetchEntitiesCached(domain, 3000, { forceRefresh: attempt === 1, maxDifficulty })
-    const filtered = filterEntities(entities)
+    const { entities: rawEntities, edgeLabels } = await fetchEntitiesCached(domain, 3000, { forceRefresh: attempt === 1, maxDifficulty })
+    lastEdgeLabels = edgeLabels
+    const filtered = filterEntities(rawEntities)
     const graph = buildGraph(filtered)
     const entityIds = filtered.filter((e: any) => e.relatedIds.length >= 2 && e.label.length <= 30 && !/^Q\d+$/.test(e.label)).map((e: any) => e.id)
     const puzzle = composePuzzleForDifficulty({ entities: filtered, graph, entityIds, targetDifficulty: difficulty, domainOverrides })
@@ -70,8 +72,8 @@ function filterEntities(entities: any[]): any[] {
 
   if (!bestPuzzle) { console.error('No puzzle found'); process.exit(1) }
 
-  const entities = await fetchEntitiesCached(domain, 3000, { forceRefresh: false, maxDifficulty })
-  const filtered = filterEntities(entities)
+  const { entities: rawEntities2 } = await fetchEntitiesCached(domain, 3000, { forceRefresh: false, maxDifficulty })
+  const filtered = filterEntities(rawEntities2)
   const entityMap = new Map(filtered.map((e: any) => [e.id, e]))
 
   console.log(`\nPublishing best path (${bestScore}/10): ${bestPath.join(' → ')}`)
@@ -90,6 +92,15 @@ function filterEntities(entities: any[]): any[] {
     bubbles: bestPuzzle.bubbles, connections: bestPuzzle.connections,
     optimal_path: bestPuzzle.optimalPath, difficulty: bestPuzzle.difficulty,
     narrative, status: 'published', qc_score: bestScore,
+    edge_labels: (() => {
+      const bubbleSet = new Set(bestPuzzle.bubbles.map((b: any) => b.id))
+      const fl: Record<string, string> = {}
+      for (const [k, v] of Object.entries(lastEdgeLabels)) {
+        const [a, b] = k.split('|')
+        if (bubbleSet.has(a) && bubbleSet.has(b)) fl[k] = v as string
+      }
+      return Object.keys(fl).length > 0 ? fl : null
+    })(),
   }, { onConflict: 'category_id,date,difficulty' })
 
   if (error) { console.error('DB error:', error.message); process.exit(1) }

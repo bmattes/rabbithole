@@ -37,6 +37,7 @@ interface PuzzleDraft {
   pathLabels: string[]
   qcScore: number
   qualityScore: number
+  edgeLabels?: Record<string, string>
 }
 
 function draftPath(difficulty: Difficulty): string {
@@ -155,8 +156,8 @@ async function runDifficulty(difficulty: Difficulty, entityLimit: number): Promi
 
       // Re-fetch entities only for narrative generation (need labels)
       const maxDifficulty = DIFFICULTY_TO_MAX_SUBQUERY[difficulty]
-      const entities = await fetchEntitiesCached(domain, entityLimit, { forceRefresh: false, maxDifficulty })
-      const filtered = filterEntities(entities)
+      const { entities: rawEntities } = await fetchEntitiesCached(domain, entityLimit, { forceRefresh: false, maxDifficulty })
+      const filtered = filterEntities(rawEntities)
       const entityMap = new Map(filtered.map((e: any) => [e.id, e]))
       const pathLabels = draft.pathLabels
 
@@ -179,6 +180,7 @@ async function runDifficulty(difficulty: Difficulty, entityLimit: number): Promi
         narrative,
         status: 'published',
         qc_score: draft.qcScore,
+        edge_labels: draft.edgeLabels ?? null,
       }, { onConflict: 'category_id,date,difficulty' })
 
       console.log(`[${domain}/${difficulty}] ✓ Published (from draft)`)
@@ -189,8 +191,8 @@ async function runDifficulty(difficulty: Difficulty, entityLimit: number): Promi
 
   // Compose fresh puzzle
   const maxDifficulty = DIFFICULTY_TO_MAX_SUBQUERY[difficulty]
-  const entities = await fetchEntitiesCached(domain, entityLimit, { forceRefresh: FORCE_REFRESH, maxDifficulty })
-  const filtered = filterEntities(entities)
+  const { entities: rawEntities, edgeLabels } = await fetchEntitiesCached(domain, entityLimit, { forceRefresh: FORCE_REFRESH, maxDifficulty })
+  const filtered = filterEntities(rawEntities)
   const graph = buildGraph(filtered)
   const entityIds = buildEntityIds(filtered, difficulty)
 
@@ -226,7 +228,13 @@ async function runDifficulty(difficulty: Difficulty, entityLimit: number): Promi
 
   // Save passing puzzle as draft for the publish pass
   if (DRY_RUN && qcResult.pass) {
-    saveDraft(difficulty, { puzzle, pathLabels, qcScore: qcResult.score, qualityScore: qScore.total })
+    const bubbleSet = new Set(puzzle.bubbles.map((b: any) => b.id))
+    const filteredEdgeLabels: Record<string, string> = {}
+    for (const [key, label] of Object.entries(edgeLabels)) {
+      const [a, b] = key.split('|')
+      if (bubbleSet.has(a) && bubbleSet.has(b)) filteredEdgeLabels[key] = label
+    }
+    saveDraft(difficulty, { puzzle, pathLabels, qcScore: qcResult.score, qualityScore: qScore.total, edgeLabels: filteredEdgeLabels })
   }
 
   return {

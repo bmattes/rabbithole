@@ -1,4 +1,5 @@
 import { Entity } from './graphBuilder'
+import { FetchResult } from './wikidata'
 
 // MusicBrainz API — CC0, no auth required, 1 req/sec rate limit
 const MB_BASE = 'https://musicbrainz.org/ws/2'
@@ -75,7 +76,7 @@ async function fetchArtistRelations(artistId: string): Promise<MBArtist | null> 
 export async function fetchMusicBrainzEntities(
   domain: MusicBrainzDomain,
   limit = 500,
-): Promise<Entity[]> {
+): Promise<FetchResult> {
   const tags = DOMAIN_TAGS[domain]
   const perTag = Math.ceil(limit / tags.length)
 
@@ -94,6 +95,7 @@ export async function fetchMusicBrainzEntities(
 
   // Step 2: for each artist, fetch label + band relations
   const entityMap = new Map<string, Entity>()
+  const edgeLabels: Record<string, string> = {}
 
   // Add all artists as entities first
   for (const [id, artist] of artistMap) {
@@ -124,6 +126,8 @@ export async function fetchMusicBrainzEntities(
         if (!entity.relatedIds.includes(bandId)) entity.relatedIds.push(bandId)
         const band = entityMap.get(bandId)!
         if (!band.relatedIds.includes(artistId)) band.relatedIds.push(artistId)
+        edgeLabels[`${artistId}|${bandId}`] = 'member of'
+        edgeLabels[`${bandId}|${artistId}`] = 'member of'
       }
 
       // Record label: artist ↔ label
@@ -136,6 +140,8 @@ export async function fetchMusicBrainzEntities(
         if (!entity.relatedIds.includes(labelId)) entity.relatedIds.push(labelId)
         const labelEntity = entityMap.get(labelId)!
         if (!labelEntity.relatedIds.includes(artistId)) labelEntity.relatedIds.push(artistId)
+        edgeLabels[`${artistId}|${labelId}`] = 'signed to'
+        edgeLabels[`${labelId}|${artistId}`] = 'signed to'
       }
 
       // Collaboration: artist ↔ artist
@@ -157,6 +163,8 @@ export async function fetchMusicBrainzEntities(
         if (!entity.relatedIds.includes(otherId)) entity.relatedIds.push(otherId)
         const other = entityMap.get(otherId)!
         if (!other.relatedIds.includes(artistId)) other.relatedIds.push(artistId)
+        edgeLabels[`${artistId}|${otherId}`] = 'collaborated with'
+        edgeLabels[`${otherId}|${artistId}`] = 'collaborated with'
       }
     }
 
@@ -169,5 +177,6 @@ export async function fetchMusicBrainzEntities(
   console.log(`\n  [${domain}] built graph: ${entityMap.size} entities`)
 
   // Drop entities with no connections (orphans from relation fetches)
-  return Array.from(entityMap.values()).filter(e => e.relatedIds.length > 0)
+  const entities = Array.from(entityMap.values()).filter(e => e.relatedIds.length > 0)
+  return { entities, edgeLabels }
 }

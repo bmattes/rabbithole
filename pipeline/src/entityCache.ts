@@ -1,7 +1,7 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import { Entity } from './graphBuilder'
-import { fetchEntities, CategoryDomain, WikidataDomain, SubqueryDifficulty } from './wikidata'
+import { fetchEntities, FetchResult, CategoryDomain, WikidataDomain, SubqueryDifficulty } from './wikidata'
 import { fetchMusicBrainzEntities, MusicBrainzDomain } from './musicbrainz'
 import { enrichWithPageviews } from './pageviewEnricher'
 
@@ -12,6 +12,7 @@ interface CacheEntry {
   fetchedAt: number
   domain: CategoryDomain
   entities: Entity[]
+  edgeLabels: Record<string, string>
 }
 
 function cachePath(domain: CategoryDomain, difficulty?: SubqueryDifficulty): string {
@@ -31,9 +32,9 @@ function readCache(domain: CategoryDomain, difficulty?: SubqueryDifficulty): Cac
   }
 }
 
-function writeCache(domain: CategoryDomain, entities: Entity[], difficulty?: SubqueryDifficulty): void {
+function writeCache(domain: CategoryDomain, entities: Entity[], edgeLabels: Record<string, string>, difficulty?: SubqueryDifficulty): void {
   if (!fs.existsSync(CACHE_DIR)) fs.mkdirSync(CACHE_DIR, { recursive: true })
-  const entry: CacheEntry = { fetchedAt: Date.now(), domain, entities }
+  const entry: CacheEntry = { fetchedAt: Date.now(), domain, entities, edgeLabels }
   fs.writeFileSync(cachePath(domain, difficulty), JSON.stringify(entry))
 }
 
@@ -41,7 +42,7 @@ export async function fetchEntitiesCached(
   domain: CategoryDomain,
   limit = 1500,
   { forceRefresh = false, maxDifficulty }: { forceRefresh?: boolean; maxDifficulty?: SubqueryDifficulty } = {}
-): Promise<Entity[]> {
+): Promise<FetchResult> {
   const isMusicBrainz = (domain as string).startsWith('mb_')
   // MusicBrainz domains don't use difficulty-based subqueries
   const diffKey = isMusicBrainz ? undefined : maxDifficulty
@@ -51,18 +52,18 @@ export async function fetchEntitiesCached(
     if (cached) {
       const ageHours = Math.round((Date.now() - cached.fetchedAt) / 3600000)
       console.log(`  [${domain}${diffKey ? `/${diffKey}` : ''}] using cached entities (${cached.entities.length} entities, ${ageHours}h old)`)
-      return cached.entities
+      return { entities: cached.entities, edgeLabels: cached.edgeLabels ?? {} }
     }
   }
 
-  const entities = isMusicBrainz
+  const result: FetchResult = isMusicBrainz
     ? await fetchMusicBrainzEntities(domain as MusicBrainzDomain, limit)
     : await fetchEntities(domain as WikidataDomain, limit, maxDifficulty)
 
   if (!isMusicBrainz) {
-    await enrichWithPageviews(entities)
+    await enrichWithPageviews(result.entities)
   }
 
-  writeCache(domain, entities, diffKey)
-  return entities
+  writeCache(domain, result.entities, result.edgeLabels, diffKey)
+  return result
 }

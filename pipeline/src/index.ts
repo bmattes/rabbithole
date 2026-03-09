@@ -109,12 +109,12 @@ async function attemptDifficulty(
 
   const maxDifficulty = DIFFICULTY_TO_MAX_SUBQUERY[difficulty]
   console.log(`[${categoryName}/${difficulty}] Fetching entities (max subquery: ${maxDifficulty})...`)
-  const entities = await fetchEntitiesCached(domain, entityLimit, { forceRefresh, maxDifficulty })
-  console.log(`[${categoryName}/${difficulty}] Got ${entities.length} entities`)
+  const { entities: rawEntities, edgeLabels } = await fetchEntitiesCached(domain, entityLimit, { forceRefresh, maxDifficulty })
+  console.log(`[${categoryName}/${difficulty}] Got ${rawEntities.length} entities`)
 
-  const filtered = filterEntities(entities, domain)
-  if (filtered.length < entities.length) {
-    console.log(`[${categoryName}/${difficulty}] Stripped ${entities.length - filtered.length} abstract bridge nodes`)
+  const filtered = filterEntities(rawEntities, domain)
+  if (filtered.length < rawEntities.length) {
+    console.log(`[${categoryName}/${difficulty}] Stripped ${rawEntities.length - filtered.length} abstract bridge nodes`)
   }
 
   const graph = buildGraph(filtered)
@@ -145,6 +145,14 @@ async function attemptDifficulty(
     category: categoryName,
   })
 
+  // Filter edgeLabels to only edges between bubbles in this puzzle
+  const bubbleSet = new Set(puzzle.bubbles.map((b: any) => b.id))
+  const filteredEdgeLabels: Record<string, string> = {}
+  for (const [key, label] of Object.entries(edgeLabels)) {
+    const [a, b] = key.split('|')
+    if (bubbleSet.has(a) && bubbleSet.has(b)) filteredEdgeLabels[key] = label
+  }
+
   const { data, error } = await supabase.from('puzzles').upsert({
     category_id: categoryId,
     date,
@@ -156,6 +164,7 @@ async function attemptDifficulty(
     difficulty: puzzle.difficulty,
     narrative,
     status: 'published',
+    edge_labels: Object.keys(filteredEdgeLabels).length > 0 ? filteredEdgeLabels : null,
   }, { onConflict: 'category_id,date,difficulty' }).select('id').single()
 
   if (error) {
