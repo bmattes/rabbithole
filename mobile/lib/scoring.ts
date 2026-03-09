@@ -1,9 +1,82 @@
-const BASE_POINTS = 1000
-const TIME_HALF_LIFE_MS = 5 * 60 * 1000 // 5 minutes to reach 0.5 multiplier
-const MIN_TIME_MULTIPLIER = 0.1
-const EXTRA_HOP_PENALTY = 0.20   // each hop beyond optimal: -20%
-const OFF_PATH_PENALTY = 0.15    // each node not on optimal path: -15%
+// Difficulty-based time score ceilings (max points from time alone)
+export const TIME_CEILING: Record<string, number> = {
+  easy: 400,
+  medium: 300,
+  hard: 200,
+}
 
+// Difficulty-based node score budgets (max points from node quality)
+export const NODE_BUDGET: Record<string, number> = {
+  easy: 600,
+  medium: 700,
+  hard: 800,
+}
+
+const TIME_DECAY_MS = 180000  // 3 minutes to reach ~e^-1 of ceiling
+const TIME_FLOOR = 50         // minimum time score (floors after ~5 min)
+const TIME_FLOOR_MS = 300000  // 5 minutes — hard floor
+
+/** Current live time score based on elapsed ms and difficulty */
+export function computeLiveTimeScore(elapsedMs: number, difficulty: string): number {
+  if (elapsedMs >= TIME_FLOOR_MS) return TIME_FLOOR
+  const ceiling = TIME_CEILING[difficulty] ?? TIME_CEILING.easy
+  return Math.max(TIME_FLOOR, Math.round(ceiling * Math.exp(-elapsedMs / TIME_DECAY_MS)))
+}
+
+export type NodeCategory = 'right_place' | 'wrong_place' | 'wrong_node'
+
+export interface NodeScore {
+  id: string
+  label: string
+  category: NodeCategory
+  points: number
+}
+
+/**
+ * Score each intermediate node in the player's final path.
+ * Start and end nodes are excluded.
+ */
+export function computeNodeScores(
+  playerPath: string[],
+  optimalPath: string[],
+  difficulty: string,
+  labelMap: Record<string, string>
+): NodeScore[] {
+  const budget = NODE_BUDGET[difficulty] ?? NODE_BUDGET.easy
+  const intermediates = playerPath.slice(1, -1)
+  const numIntermediates = intermediates.length
+  if (numIntermediates === 0) return []
+
+  const perNode = budget / numIntermediates
+  const optimalIntermediates = optimalPath.slice(1, -1)
+  const optimalSet = new Set(optimalIntermediates)
+
+  return intermediates.map((id, i) => {
+    let category: NodeCategory
+    let points: number
+
+    if (optimalIntermediates[i] === id) {
+      category = 'right_place'
+      points = Math.round(perNode)
+    } else if (optimalSet.has(id)) {
+      category = 'wrong_place'
+      points = Math.round(perNode * 0.4)
+    } else {
+      category = 'wrong_node'
+      points = 0
+    }
+
+    return { id, label: labelMap[id] ?? id, category, points }
+  })
+}
+
+/** Compute final score: liveScore + nodeScores, capped at 1000, floored at 100 */
+export function computeFinalScore(liveScore: number, nodeScores: NodeScore[]): number {
+  const nodeTotal = nodeScores.reduce((sum, n) => sum + n.points, 0)
+  return Math.max(100, Math.min(1000, liveScore + nodeTotal))
+}
+
+// Keep for XP calculation
 export function computePathMultiplier(
   playerPath: string[],
   optimalPath: string[]
@@ -11,32 +84,9 @@ export function computePathMultiplier(
   const optimalSet = new Set(optimalPath)
   const playerHops = playerPath.length - 1
   const optimalHops = optimalPath.length - 1
-
   const extraHops = Math.max(0, playerHops - optimalHops)
-  // Count middle nodes (exclude start/end) that aren't on the optimal path
   const offPathNodes = playerPath.slice(1, -1).filter(id => !optimalSet.has(id)).length
-
-  const hopPenalty = Math.pow(1 - EXTRA_HOP_PENALTY, extraHops)
-  const offPathPenalty = Math.pow(1 - OFF_PATH_PENALTY, offPathNodes)
-
+  const hopPenalty = Math.pow(0.80, extraHops)
+  const offPathPenalty = Math.pow(0.85, offPathNodes)
   return hopPenalty * offPathPenalty
-}
-
-export function computeTimeMultiplier(timeMs: number): number {
-  const raw = Math.pow(0.5, timeMs / TIME_HALF_LIFE_MS)
-  return Math.max(MIN_TIME_MULTIPLIER, raw)
-}
-
-export function computeScore({
-  playerPath,
-  optimalPath,
-  timeMs,
-}: {
-  playerPath: string[]
-  optimalPath: string[]
-  timeMs: number
-}): number {
-  const pathMultiplier = computePathMultiplier(playerPath, optimalPath)
-  const timeMultiplier = computeTimeMultiplier(timeMs)
-  return Math.round(BASE_POINTS * pathMultiplier * timeMultiplier)
 }

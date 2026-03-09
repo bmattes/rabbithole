@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { View, Text, Pressable, StyleSheet, ActivityIndicator, Dimensions } from 'react-native'
+import { View, Text, Pressable, StyleSheet, ActivityIndicator, Dimensions, Modal, ScrollView } from 'react-native'
 import { useLocalSearchParams, router } from 'expo-router'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { PuzzleCanvas } from '../../components/PuzzleCanvas'
 import { usePuzzle } from '../../hooks/usePuzzle'
 import { useTimer } from '../../hooks/useTimer'
 import { useAuth } from '../../hooks/useAuth'
 import { useProgression } from '../../hooks/useProgression'
-import { computeScore } from '../../lib/scoring'
+import { computeNodeScores, computeFinalScore, computeLiveTimeScore } from '../../lib/scoring'
 import { submitRun } from '../../lib/api'
 import { separateBubbles } from '../../lib/bubbleLayout'
 import { colors } from '../../lib/theme'
@@ -25,24 +26,55 @@ const DOMAIN_HINTS: Record<string, string> = {
 
 const { width: SW } = Dimensions.get('window')
 
+const HINT_FTUE_ITEMS = [
+  {
+    type: 'connection',
+    icon: '🔗',
+    label: 'Connection',
+    desc: 'Activates a mode where only valid connections are possible. Hover over any bubble to see how it links to your current node. Spends when you make a connection.',
+  },
+  {
+    type: 'shuffle',
+    icon: '🔀',
+    label: 'Shuffle',
+    desc: 'Rearranges all the bubbles into a new layout. Useful if the current arrangement feels cluttered.',
+  },
+  {
+    type: 'flash',
+    icon: '⚡',
+    label: 'Flash',
+    desc: 'Briefly shows 4 possible paths from Start to End — one is the real optimal path, three are red herrings. Watch carefully!',
+  },
+  {
+    type: 'bridge',
+    icon: '🌉',
+    label: 'Reveal',
+    desc: 'Highlights one unknown node on the optimal path. Use up to 3 times to reveal up to 3 bridge nodes on a single puzzle.',
+  },
+]
+
 function buildFakePaths(
   realPath: string[],
   startId: string,
+  endId: string,
   allIds: string[],
-  connections: Record<string, string[]>,
   count: number
 ): string[][] {
+  const intermediatePool = allIds.filter(id => id !== startId && id !== endId)
+  const numIntermediates = realPath.length - 2  // same length as real path
+  const seen = new Set<string>([realPath.slice(1, -1).join('|')])
   const results: string[][] = []
-  for (let i = 0; i < count; i++) {
-    const path = [startId]
-    for (let step = 1; step < realPath.length; step++) {
-      const current = path[path.length - 1]
-      const neighbors = (connections[current] ?? []).filter(n => !path.includes(n))
-      if (neighbors.length === 0) break
-      path.push(neighbors[Math.floor(Math.random() * neighbors.length)])
-    }
-    if (path.length >= 2) results.push(path)
+
+  for (let attempt = 0; attempt < count * 20 && results.length < count; attempt++) {
+    const shuffled = [...intermediatePool].sort(() => Math.random() - 0.5)
+    const intermediates = shuffled.slice(0, numIntermediates)
+    if (intermediates.length < numIntermediates) continue
+    const key = intermediates.join('|')
+    if (seen.has(key)) continue
+    seen.add(key)
+    results.push([startId, ...intermediates, endId])
   }
+
   return results
 }
 
@@ -59,15 +91,37 @@ export default function PuzzleScreen() {
   const [canvasHeight, setCanvasHeight] = useState(0)
   const canvasHeightSetRef = useRef(false)
 
-  const { hintsRemaining, useHint } = useHints(userId)
+  const { remainingByType, useHint } = useHints(userId)
   const [activeHint, setActiveHint] = useState<HintType | null>(null)
-  const [bridgeNodeId, setBridgeNodeId] = useState<string | null>(null)
+  const [bridgeNodeIds, setBridgeNodeIds] = useState<Set<string>>(new Set())
   const [flashPaths, setFlashPaths] = useState<string[][] | null>(null)
   const [shuffledBubbles, setShuffledBubbles] = useState<typeof layoutBubbles | null>(null)
+  const [showHintsFtue, setShowHintsFtue] = useState(false)
+
+  useEffect(() => {
+    AsyncStorage.getItem('hasSeenHintsFtue').then(val => {
+      if (!val) setShowHintsFtue(true)
+    })
+  }, [])
+
+  async function dismissHintsFtue() {
+    await AsyncStorage.setItem('hasSeenHintsFtue', '1')
+    setShowHintsFtue(false)
+  }
 
   const puzzle = livePuzzle
   const domain = puzzle?.domain
   const optimalHops = puzzle ? puzzle.optimal_path.length - 1 : 0
+
+  const bubbleScale = useMemo(() => {
+    if (!puzzle || canvasHeight === 0) return 1
+    const n = puzzle.bubbles.length - 2  // intermediates only
+    const BASE_W = 180, BASE_H = 60, GAP = 16
+    const canvasArea = SW * canvasHeight
+    const neededArea = n * (BASE_W + GAP) * (BASE_H + GAP) * 2.5  // 2.5x packing factor
+    if (neededArea <= canvasArea) return 1
+    return Math.max(0.55, Math.sqrt(canvasArea / neededArea))
+  }, [puzzle?.id, canvasHeight])
 
   const layoutBubbles = useMemo(() => {
     if (!puzzle || canvasHeight === 0) return []
@@ -77,10 +131,13 @@ export default function PuzzleScreen() {
       puzzle.bubbles.map(b => b.position),
       SW,
       canvasHeight,
-      fixedIndices
+      fixedIndices,
+      200,
+      undefined,
+      bubbleScale
     )
     return puzzle.bubbles.map((b, i) => ({ ...b, position: positions[i] }))
-  }, [puzzle?.id, canvasHeight])
+  }, [puzzle?.id, canvasHeight, bubbleScale])
 
   useEffect(() => {
     if (layoutBubbles.length > 0 && !started) { start(); setStarted(true) }
@@ -103,9 +160,11 @@ export default function PuzzleScreen() {
   async function handlePathComplete(path: string[]) {
     const timeMs = stop()
     const hops = path.length - 1
-    const score = computeScore({ playerPath: path, optimalPath: puzzle!.optimal_path, timeMs })
-
     const labelMap = Object.fromEntries(puzzle!.bubbles.map(b => [b.id, b.label]))
+    const nodeScores = computeNodeScores(path, puzzle!.optimal_path, puzzle!.difficulty ?? 'easy', labelMap)
+    const liveScore = computeLiveTimeScore(timeMs, puzzle!.difficulty ?? 'easy')
+    const score = computeFinalScore(liveScore, nodeScores)
+
     const playerPathLabels = path.map(id => labelMap[id] ?? id).join('|')
     const optimalPathLabels = puzzle!.optimal_path.map(id => labelMap[id] ?? id).join('|')
 
@@ -122,13 +181,13 @@ export default function PuzzleScreen() {
   }
 
   async function handleUseHint(type: HintType) {
-    // Bridge pre-check: skip if no intermediate nodes (1-hop puzzle)
+    // Bridge pre-check: skip if no unrevealed intermediate nodes remain
     if (type === 'bridge') {
-      const intermediates = puzzle!.optimal_path.slice(1, -1)
-      if (intermediates.length === 0) return  // nothing to reveal, don't charge
+      const unrevealed = puzzle!.optimal_path.slice(1, -1).filter(id => !bridgeNodeIds.has(id))
+      if (unrevealed.length === 0) return  // nothing new to reveal, don't charge
     }
 
-    const ok = await useHint()
+    const ok = await useHint(type)
     if (!ok) return
 
     if (type === 'connection') {
@@ -140,12 +199,7 @@ export default function PuzzleScreen() {
       const base = shuffledBubbles ?? layoutBubbles
       const n = base.length
       const fixed = new Set([0, n - 1])
-      // Use random seed positions, then run separateBubbles to guarantee no overlaps
-      const randomised = base.map((b, i) => fixed.has(i) ? b.position : {
-        x: 60 + Math.random() * (SW - 120),
-        y: 150 + Math.random() * (Math.max(canvasHeight - 230, 100)),
-      })
-      const separated = separateBubbles(randomised, SW, canvasHeight, fixed)
+      const separated = separateBubbles(base.map(b => b.position), SW, canvasHeight, fixed, 200, Date.now(), bubbleScale)
       setShuffledBubbles(base.map((b, i) => ({ ...b, position: separated[i] })))
       setActiveHint(null)
     }
@@ -153,16 +207,16 @@ export default function PuzzleScreen() {
     if (type === 'flash') {
       const realPath = puzzle!.optimal_path
       const allBubbleIds = (shuffledBubbles ?? layoutBubbles).map(b => b.id)
-      const fakePaths = buildFakePaths(realPath, puzzle!.bubbles[0].id, allBubbleIds, puzzle!.connections, 2)
+      const fakePaths = buildFakePaths(realPath, puzzle!.bubbles[0].id, puzzle!.bubbles[puzzle!.bubbles.length - 1].id, allBubbleIds, 3)
       const allPaths = [...fakePaths, realPath].sort(() => Math.random() - 0.5)
       setFlashPaths(allPaths)
       setActiveHint('flash')
     }
 
     if (type === 'bridge') {
-      const intermediates = puzzle!.optimal_path.slice(1, -1)
-      const pick = intermediates[Math.floor(Math.random() * intermediates.length)]
-      setBridgeNodeId(pick)
+      const unrevealed = puzzle!.optimal_path.slice(1, -1).filter(id => !bridgeNodeIds.has(id))
+      const pick = unrevealed[Math.floor(Math.random() * unrevealed.length)]
+      setBridgeNodeIds(prev => new Set(prev).add(pick))
       setActiveHint(null)
     }
   }
@@ -199,39 +253,68 @@ export default function PuzzleScreen() {
           </View>
         </View>
       </View>
-      <PuzzleCanvas
-        bubbles={shuffledBubbles ?? layoutBubbles}
-        connections={puzzle.connections}
-        startId={puzzle.bubbles[0]?.id}
-        endId={puzzle.bubbles[puzzle.bubbles.length - 1]?.id}
-        minHops={optimalHops}
-        onPathComplete={handlePathComplete}
-        onPathChange={(path) => setCurrentHops(Math.max(0, path.length - 1))}
-        edgeLabels={puzzle.edgeLabels}
-        onCanvasLayout={h => {
-          if (!canvasHeightSetRef.current && h > 0) {
-            canvasHeightSetRef.current = true
-            setCanvasHeight(h)
-          }
-        }}
-        connectionModeActive={activeHint === 'connection'}
-        onConnectionModeUsed={() => setActiveHint(null)}
-        bridgeNodeId={bridgeNodeId}
-        flashPaths={flashPaths}
-        onFlashComplete={() => { setFlashPaths(null); setActiveHint(null) }}
-      />
+      <View style={styles.canvasWrapper}>
+        <PuzzleCanvas
+          bubbles={shuffledBubbles ?? layoutBubbles}
+          connections={puzzle.connections}
+          startId={puzzle.bubbles[0]?.id}
+          endId={puzzle.bubbles[puzzle.bubbles.length - 1]?.id}
+          minHops={optimalHops}
+          onPathComplete={handlePathComplete}
+          onPathChange={(path) => setCurrentHops(Math.max(0, path.length - 1))}
+          edgeLabels={puzzle.edgeLabels}
+          onCanvasLayout={h => {
+            if (!canvasHeightSetRef.current && h > 0) {
+              canvasHeightSetRef.current = true
+              setCanvasHeight(h)
+            }
+          }}
+          connectionModeActive={activeHint === 'connection'}
+          onConnectionModeUsed={() => setActiveHint(null)}
+          bridgeNodeIds={bridgeNodeIds}
+          flashPaths={flashPaths}
+          onFlashComplete={() => { setFlashPaths(null); setActiveHint(null) }}
+          bubbleScale={bubbleScale}
+        />
+      </View>
       <HintTray
-        hintsRemaining={hintsRemaining}
+        remainingByType={remainingByType}
         activeHint={activeHint}
         onUseHint={handleUseHint}
         connectionAvailable={!!(puzzle.edgeLabels && Object.keys(puzzle.edgeLabels).length > 0)}
       />
+
+      <Modal visible={showHintsFtue} transparent animationType="fade">
+        <View style={ftue.overlay}>
+          <View style={ftue.sheet}>
+            <Text style={ftue.heading}>Your Hints</Text>
+            <Text style={ftue.sub}>You get 3 uses of each hint per day.</Text>
+
+            <ScrollView style={ftue.scroll} showsVerticalScrollIndicator={false}>
+              {HINT_FTUE_ITEMS.map(h => (
+                <View key={h.type} style={ftue.row}>
+                  <Text style={ftue.icon}>{h.icon}</Text>
+                  <View style={ftue.rowText}>
+                    <Text style={ftue.rowTitle}>{h.label}</Text>
+                    <Text style={ftue.rowBody}>{h.desc}</Text>
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+
+            <Pressable style={ftue.btn} onPress={dismissHintsFtue}>
+              <Text style={ftue.btnText}>Got it →</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
+  container: { flex: 1, backgroundColor: colors.bg, flexDirection: 'column' },
+  canvasWrapper: { flex: 1 },
   center: { flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' },
   header: {
     paddingTop: 56,
@@ -261,4 +344,61 @@ const styles = StyleSheet.create({
   error: { color: colors.error, fontSize: 16, marginBottom: 20 },
   backFallback: { paddingVertical: 10, paddingHorizontal: 20 },
   backFallbackText: { color: colors.accent, fontSize: 16 },
+})
+
+const ftue = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    backgroundColor: colors.bgCard,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 24,
+    paddingTop: 28,
+    paddingBottom: 48,
+    maxHeight: '80%',
+  },
+  heading: {
+    color: colors.textPrimary,
+    fontSize: 22,
+    fontWeight: '800',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  sub: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  scroll: { marginBottom: 20 },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 14,
+    marginBottom: 20,
+  },
+  icon: { fontSize: 26, marginTop: 2 },
+  rowText: { flex: 1 },
+  rowTitle: {
+    color: colors.textPrimary,
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  rowBody: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  btn: {
+    backgroundColor: colors.accent,
+    borderRadius: 14,
+    paddingVertical: 15,
+    alignItems: 'center',
+  },
+  btnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
 })
