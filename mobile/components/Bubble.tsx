@@ -12,7 +12,6 @@ interface BubbleProps {
   index?: number
   pulse?: boolean
   hovering?: boolean
-  animatedPosition?: Animated.ValueXY
 }
 
 // Hit target size — used for layout and touch detection
@@ -43,7 +42,7 @@ const RING_RX = BUBBLE_H / 2 + RING_PAD  // border-radius matches pill
 const RING_PERIMETER = 2 * (RING_W - 2 * RING_RX) + 2 * (RING_H - 2 * RING_RX) + 2 * Math.PI * RING_RX
 const AnimatedRect = Animated.createAnimatedComponent(Rect)
 
-export function Bubble({ label: rawLabel, state, position, index = 0, pulse, hovering, animatedPosition }: BubbleProps) {
+export function Bubble({ label: rawLabel, state, position, index = 0, pulse, hovering }: BubbleProps) {
   const label = rawLabel.charAt(0).toUpperCase() + rawLabel.slice(1)
   const translateY = useRef(new Animated.Value(40)).current
   const opacity = useRef(new Animated.Value(0)).current
@@ -100,17 +99,11 @@ export function Bubble({ label: rawLabel, state, position, index = 0, pulse, hov
         state === 'idle' && styles.textNodeIdle,
         state === 'active' && styles.textNodeActive,
         state === 'bridge' && styles.textNodeBridge,
-        animatedPosition
-          ? {
-              width: displayW,
-              left: Animated.subtract(animatedPosition.x, displayW / 2),
-              top: Animated.subtract(animatedPosition.y, BUBBLE_H / 2),
-            }
-          : {
-              width: displayW,
-              left: position.x - displayW / 2,
-              top: position.y - BUBBLE_H / 2,
-            },
+        {
+          width: displayW,
+          left: position.x - displayW / 2,
+          top: position.y - BUBBLE_H / 2,
+        },
         { transform: [{ translateY }, { scale }], opacity },
       ]}
     >

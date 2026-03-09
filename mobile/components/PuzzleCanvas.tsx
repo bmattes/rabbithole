@@ -65,28 +65,41 @@ export function PuzzleCanvas({
   const [hintPos, setHintPos] = useState<{ x: number; y: number } | null>(null)
   const [flashActivePath, setFlashActivePath] = useState<string[]>([])
 
-  // Animated positions for shuffle animation — keyed by bubble id
-  const animatedPositions = useMemo(() => {
+  // Translate offsets for shuffle animation — each starts at {x:0,y:0} (no offset).
+  // On shuffle, we snap each offset to -(delta) so the bubble appears at its old
+  // position, then spring back to {x:0,y:0} so it glides to the new position.
+  // Uses useNativeDriver:true since we only animate transform (translateX/Y).
+  const shuffleOffsets = useMemo(() => {
     const map = new Map<string, Animated.ValueXY>()
     for (const b of bubbles) {
-      map.set(b.id, new Animated.ValueXY({ x: b.position.x, y: b.position.y }))
+      map.set(b.id, new Animated.ValueXY({ x: 0, y: 0 }))
     }
     return map
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bubbles.map(b => b.id).join(',')])
 
-  // When bubble positions change (shuffle), spring each bubble to its new position
+  const prevBubblePositions = useRef<Map<string, { x: number; y: number }>>(new Map())
+
   useEffect(() => {
-    const animations = bubbles.map(b => {
-      const av = animatedPositions.get(b.id)
-      if (!av) return null
-      return Animated.spring(av, {
-        toValue: { x: b.position.x, y: b.position.y },
-        damping: 14,
-        stiffness: 120,
-        useNativeDriver: false,
-      })
-    }).filter(Boolean) as Animated.CompositeAnimation[]
+    const animations: Animated.CompositeAnimation[] = []
+    for (const b of bubbles) {
+      const offset = shuffleOffsets.get(b.id)
+      if (!offset) continue
+      const prev = prevBubblePositions.current.get(b.id)
+      if (prev && (prev.x !== b.position.x || prev.y !== b.position.y)) {
+        // Snap to negative delta so bubble visually stays at old position
+        offset.setValue({ x: prev.x - b.position.x, y: prev.y - b.position.y })
+        animations.push(
+          Animated.spring(offset, {
+            toValue: { x: 0, y: 0 },
+            damping: 14,
+            stiffness: 120,
+            useNativeDriver: true,
+          })
+        )
+      }
+      prevBubblePositions.current.set(b.id, b.position)
+    }
     if (animations.length > 0) Animated.parallel(animations).start()
   }, [bubbles])
 
@@ -404,18 +417,24 @@ export function PuzzleCanvas({
         />
       )}
 
-      {bubbles.map((bubble, i) => (
-        <Bubble
-          key={bubble.id}
-          label={bubble.label}
-          state={getBubbleState(bubble.id)}
-          position={bubble.position}
-          index={i}
-          pulse={bubble.id === lastConnectedId}
-          hovering={bubble.id === hoveringId}
-          animatedPosition={animatedPositions.get(bubble.id)}
-        />
-      ))}
+      {bubbles.map((bubble, i) => {
+        const offset = shuffleOffsets.get(bubble.id)
+        return (
+          <Animated.View
+            key={bubble.id}
+            style={offset ? { transform: offset.getTranslateTransform() } : undefined}
+          >
+            <Bubble
+              label={bubble.label}
+              state={getBubbleState(bubble.id)}
+              position={bubble.position}
+              index={i}
+              pulse={bubble.id === lastConnectedId}
+              hovering={bubble.id === hoveringId}
+            />
+          </Animated.View>
+        )
+      })}
 
       {hintLabel && hintPos && (
         <View
