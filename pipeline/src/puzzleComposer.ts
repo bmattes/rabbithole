@@ -269,7 +269,7 @@ export function composePuzzle({
   for (const id of expandIds) {
     const neighbors = shuffle(graph[id] ?? [])
     for (const n of neighbors.slice(0, 4)) {
-      if (hasGoodLabel(n)) candidateIds.add(n)
+      if (hasGoodLabel(n) && n !== startId && n !== endId) candidateIds.add(n)
     }
   }
 
