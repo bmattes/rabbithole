@@ -13,6 +13,7 @@ export interface Puzzle {
   narrative: string | null
   difficulty?: 'easy' | 'medium' | 'hard'
   domain?: string
+  edgeLabels?: Record<string, string>  // "idA|idB" → "cast member of"
 }
 
 export function localDateString() {
@@ -55,7 +56,11 @@ export async function getTodaysPuzzle(
     .eq('id', categoryId)
     .single()
 
-  return { ...data, domain: cat?.wikidata_domain ?? null } as Puzzle
+  return {
+    ...data,
+    domain: cat?.wikidata_domain ?? null,
+    edgeLabels: (data.edge_labels as Record<string, string>) ?? undefined,
+  } as Puzzle
 }
 
 export async function submitRun({
