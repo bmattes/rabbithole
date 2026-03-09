@@ -50,6 +50,7 @@ export function computeNodeScores(
   const perNode = budget / numIntermediates
   const optimalIntermediates = optimalPath.slice(1, -1)
   const optimalSet = new Set(optimalIntermediates)
+  const awardedWrongPlace = new Set<string>()
 
   return intermediates.map((id, i) => {
     let category: NodeCategory
@@ -58,7 +59,8 @@ export function computeNodeScores(
     if (optimalIntermediates[i] === id) {
       category = 'right_place'
       points = Math.round(perNode)
-    } else if (optimalSet.has(id)) {
+    } else if (optimalSet.has(id) && !awardedWrongPlace.has(id)) {
+      awardedWrongPlace.add(id)
       category = 'wrong_place'
       points = Math.round(perNode * 0.4)
     } else {
