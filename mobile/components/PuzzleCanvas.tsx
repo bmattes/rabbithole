@@ -89,6 +89,8 @@ export function PuzzleCanvas({
   connectionModeActiveRef.current = connectionModeActive ?? false
   const onConnectionModeUsedRef = useRef(onConnectionModeUsed)
   onConnectionModeUsedRef.current = onConnectionModeUsed
+  const onFlashCompleteRef = useRef(onFlashComplete)
+  onFlashCompleteRef.current = onFlashComplete
 
   const dwellBubbleRef = useRef<string | null>(null)
   const dwellTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -132,7 +134,7 @@ export function PuzzleCanvas({
         setFlashActivePath([])
         await new Promise(r => setTimeout(r, 150))
       }
-      if (!cancelled) onFlashComplete?.()
+      if (!cancelled) onFlashCompleteRef.current?.()
     }
     runFlash()
     return () => { cancelled = true; setFlashActivePath([]) }
