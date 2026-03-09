@@ -27,14 +27,14 @@ const { width: SW } = Dimensions.get('window')
 
 function buildFakePaths(
   realPath: string[],
+  startId: string,
   allIds: string[],
   connections: Record<string, string[]>,
   count: number
 ): string[][] {
   const results: string[][] = []
   for (let i = 0; i < count; i++) {
-    const start = allIds[Math.floor(Math.random() * allIds.length)]
-    const path = [start]
+    const path = [startId]
     for (let step = 1; step < realPath.length; step++) {
       const current = path[path.length - 1]
       const neighbors = (connections[current] ?? []).filter(n => !path.includes(n))
@@ -122,6 +122,12 @@ export default function PuzzleScreen() {
   }
 
   async function handleUseHint(type: HintType) {
+    // Bridge pre-check: skip if no intermediate nodes (1-hop puzzle)
+    if (type === 'bridge') {
+      const intermediates = puzzle!.optimal_path.slice(1, -1)
+      if (intermediates.length === 0) return  // nothing to reveal, don't charge
+    }
+
     const ok = await useHint()
     if (!ok) return
 
@@ -148,7 +154,7 @@ export default function PuzzleScreen() {
     if (type === 'flash') {
       const realPath = puzzle!.optimal_path
       const allBubbleIds = (shuffledBubbles ?? layoutBubbles).map(b => b.id)
-      const fakePaths = buildFakePaths(realPath, allBubbleIds, puzzle!.connections, 2)
+      const fakePaths = buildFakePaths(realPath, puzzle!.bubbles[0].id, allBubbleIds, puzzle!.connections, 2)
       const allPaths = [...fakePaths, realPath].sort(() => Math.random() - 0.5)
       setFlashPaths(allPaths)
       setActiveHint('flash')
@@ -156,10 +162,8 @@ export default function PuzzleScreen() {
 
     if (type === 'bridge') {
       const intermediates = puzzle!.optimal_path.slice(1, -1)
-      if (intermediates.length > 0) {
-        const pick = intermediates[Math.floor(Math.random() * intermediates.length)]
-        setBridgeNodeId(pick)
-      }
+      const pick = intermediates[Math.floor(Math.random() * intermediates.length)]
+      setBridgeNodeId(pick)
       setActiveHint(null)
     }
   }
