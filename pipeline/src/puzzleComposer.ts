@@ -131,6 +131,20 @@ function scatterPositions(
   return positions
 }
 
+/**
+ * For domains where the anchor type can also appear as an intermediate node
+ * (e.g. videogames: game→character→game→genre→game), we allow anchors in the
+ * middle ONLY once an "interesting" bridge type has already appeared in the path.
+ * This prevents boring game→series→game chains while enabling rich cross-universe paths.
+ *
+ * anchorType: the entity type used as start/end (e.g. 'game')
+ * interestingTypes: bridge types that "unlock" anchor intermediates (e.g. person, location, genre, platform)
+ */
+export interface IntermediateFilterConfig {
+  anchorType: string
+  interestingTypes: Set<string>
+}
+
 export interface PathQualityScore {
   total: number               // 0-100 composite
   anchorFamiliarity: number   // are start/end well-known? (0-30)
@@ -212,6 +226,7 @@ export function composePuzzle({
   targetBubbleCount = 12,
   params = DEFAULT_PARAMS,
   domainOverrides,
+  intermediateFilterConfig,
 }: {
   entities: Entity[]
   graph: Graph
@@ -220,16 +235,33 @@ export function composePuzzle({
   targetBubbleCount?: number
   params?: CompositionParams
   domainOverrides?: DomainOverrides
+  intermediateFilterConfig?: IntermediateFilterConfig
 }): ComposedPuzzle | null {
   const effectiveMinQuality = domainOverrides?.minQualityScore ?? MIN_QUALITY_SCORE
   const effectiveMaxHubRatio = domainOverrides?.maxHubRatio ?? MAX_HUB_RATIO
   const effectiveMaxMutual = domainOverrides?.maxMutualNeighbors ?? MAX_MUTUAL_NEIGHBORS
   const effectiveHubThreshold = domainOverrides?.hubRelatedIdsThreshold ?? HUB_RELATEDIDS_THRESHOLD
-  const optimalPath = findShortestPath(startId, endId, graph)
-  if (!optimalPath) return null
-  if (optimalPath.length < params.minPathLength || optimalPath.length > 8) return null
 
   const entityMap = new Map(entities.map(e => [e.id, e]))
+
+  // Build intermediate filter if domain config provided
+  // Allows anchor-type nodes in the middle only once an interesting bridge has appeared
+  const intermediateFilter = intermediateFilterConfig
+    ? (nodeId: string, pathSoFar: string[]) => {
+        const e = entityMap.get(nodeId)
+        if (!e?.entityType) return true
+        if (e.entityType !== intermediateFilterConfig.anchorType) return true
+        // Anchor type as intermediate: only allow if path already has an interesting bridge
+        return pathSoFar.slice(1).some(id => {
+          const bridge = entityMap.get(id)
+          return bridge?.entityType && intermediateFilterConfig.interestingTypes.has(bridge.entityType)
+        })
+      }
+    : undefined
+
+  const optimalPath = findShortestPath(startId, endId, graph, intermediateFilter)
+  if (!optimalPath) return null
+  if (optimalPath.length < params.minPathLength || optimalPath.length > 8) return null
 
   // Reject if any two nodes in the path share the same label (e.g. God of War 2005 vs 2018)
   const pathLabels = optimalPath.map(id => entityMap.get(id)?.label?.toLowerCase() ?? id)
@@ -338,13 +370,14 @@ function buildPairPool(
   maxHops: number,
   targetSize: number,
   sampleBudget: number,
+  intermediateFilter?: (nodeId: string, pathSoFar: string[]) => boolean,
 ): Array<[string, string]> {
   const pool: Array<[string, string]> = []
   for (let i = 0; i < sampleBudget && pool.length < targetSize; i++) {
     const startId = entityIds[Math.floor(Math.random() * entityIds.length)]
     const endId = entityIds[Math.floor(Math.random() * entityIds.length)]
     if (startId === endId) continue
-    const path = findShortestPath(startId, endId, graph)
+    const path = findShortestPath(startId, endId, graph, intermediateFilter)
     if (!path) continue
     const hops = path.length - 1
     if (hops >= minHops && hops <= maxHops) pool.push([startId, endId])
@@ -366,6 +399,7 @@ export function composePuzzleForDifficulty({
   targetDifficulty,
   targetBubbleCount = 12,
   domainOverrides,
+  intermediateFilterConfig,
 }: {
   entities: Entity[]
   graph: Graph
@@ -373,6 +407,7 @@ export function composePuzzleForDifficulty({
   targetDifficulty: Difficulty
   targetBubbleCount?: number
   domainOverrides?: DomainOverrides
+  intermediateFilterConfig?: IntermediateFilterConfig
 }): ComposedPuzzle | null {
   // Resolve effective quality thresholds (domain overrides take precedence over globals)
   const effectiveMinQuality = domainOverrides?.minQualityScore ?? MIN_QUALITY_SCORE
@@ -397,7 +432,22 @@ export function composePuzzleForDifficulty({
     const roundMinHops = Math.max(minHops, round.params.minPathLength - 1)
     // Pre-build a pool of pairs in the right hop range — avoids wasting attempts
     // on hub-dominated graphs where most pairs are too close together.
-    const pool = buildPairPool(entityIds, graph, roundMinHops, maxHops, round.attempts, round.attempts * 10)
+    // Build intermediate filter function from config (for pair pool hop estimation)
+    const intermediateFilter = intermediateFilterConfig
+      ? (() => {
+          const entityMap = new Map(entities.map(e => [e.id, e]))
+          return (nodeId: string, pathSoFar: string[]) => {
+            const e = entityMap.get(nodeId)
+            if (!e?.entityType) return true
+            if (e.entityType !== intermediateFilterConfig.anchorType) return true
+            return pathSoFar.slice(1).some(id => {
+              const bridge = entityMap.get(id)
+              return bridge?.entityType && intermediateFilterConfig.interestingTypes.has(bridge.entityType)
+            })
+          }
+        })()
+      : undefined
+    const pool = buildPairPool(entityIds, graph, roundMinHops, maxHops, round.attempts, round.attempts * 10, intermediateFilter)
     const source = pool.length >= 10 ? pool : null  // fall back to random if pool too thin
 
     for (let attempt = 0; attempt < round.attempts; attempt++) {
@@ -411,7 +461,7 @@ export function composePuzzleForDifficulty({
         if (startId === endId) continue
       }
 
-      const puzzle = composePuzzle({ entities, graph, startId, endId, targetBubbleCount, params: round.params, domainOverrides })
+      const puzzle = composePuzzle({ entities, graph, startId, endId, targetBubbleCount, params: round.params, domainOverrides, intermediateFilterConfig })
       if (puzzle && puzzle.difficulty === targetDifficulty) {
         const entityMap = new Map(entities.map(e => [e.id, e]))
         const score = scorePathQuality(puzzle.optimalPath, entityMap, puzzle.connections as Graph, effectiveHubThreshold)

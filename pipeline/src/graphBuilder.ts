@@ -21,7 +21,17 @@ export function buildGraph(entities: Entity[]): Graph {
 export function findShortestPath(
   startId: string,
   endId: string,
-  graph: Graph
+  graph: Graph,
+  /**
+   * Optional filter for intermediate nodes. When provided, a node can only
+   * appear in the middle of the path if this function returns true.
+   * Start and end nodes are never filtered.
+   *
+   * Example: restrict intermediates to non-anchor types, but allow anchor-type
+   * nodes once an "interesting" bridge (person, location, genre, platform) has
+   * already appeared in the path.
+   */
+  intermediateFilter?: (nodeId: string, pathSoFar: string[]) => boolean,
 ): string[] | null {
   const queue: string[][] = [[startId]]
   const visited = new Set<string>([startId])
@@ -33,10 +43,10 @@ export function findShortestPath(
     if (current === endId) return path
 
     for (const neighbor of graph[current] ?? []) {
-      if (!visited.has(neighbor)) {
-        visited.add(neighbor)
-        queue.push([...path, neighbor])
-      }
+      if (visited.has(neighbor)) continue
+      if (neighbor !== endId && intermediateFilter && !intermediateFilter(neighbor, path)) continue
+      visited.add(neighbor)
+      queue.push([...path, neighbor])
     }
   }
 

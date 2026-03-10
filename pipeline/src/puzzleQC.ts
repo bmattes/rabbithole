@@ -187,12 +187,18 @@ async function evaluatePuzzle(
     hard:   'This is a HARD puzzle — it should genuinely challenge even enthusiasts. Flag hops that are too easy for this difficulty level, as well as hops that are too obscure to be knowable.',
   }[difficulty] ?? ''
 
+  // Domain-specific notes to help QC understand valid bridge types
+  const domainNotes: Record<string, string> = {
+    videogames: 'IMPORTANT: For the videogames category, real-world locations (cities, countries) are VALID bridge nodes when games are narratively set there (e.g. "Fallout is set in Washington D.C." or "God of War is set in Greece"). Game genres (e.g. "first-person shooter", "role-playing video game") and gaming platforms (e.g. "PlayStation 3", "Nintendo 64") are also VALID bridge nodes — do NOT flag these as wrong_domain or abstract.',
+  }
+  const domainNote = domainNotes[domain] ?? ''
+
   const prompt = `${persona}
 
 You are reviewing a puzzle for RabbitHole, a daily trivia game where players hop through connected concepts. ${difficultyExpectation}
 
 Category: "${categoryName}" | Difficulty: ${difficulty} | Connections are via: ${connectionType}
-
+${domainNote ? `\n${domainNote}\n` : ''}
 Puzzle path to evaluate:
 ${pathStr}
 
@@ -276,9 +282,9 @@ const CONNECTION_TYPES: Record<string, Record<string, string>> = {
     hard: 'institutions and fields of work',
   },
   videogames: {
-    easy: 'game series, characters, and settings',
-    medium: 'game series, developers, and directors',
-    hard: 'game series, developers, publishers, composers, and game engines',
+    easy: 'game series, fictional characters, real-world settings (cities/countries games are set in), and game genres',
+    medium: 'game series, developers, directors, game genres, gaming platforms (consoles), and real-world locations',
+    hard: 'game series, developers, publishers, composers, voice actors, game genres, platforms, and real-world locations',
   },
   mb_rock: { easy: 'band memberships and collaborations', medium: 'band memberships and collaborations', hard: 'band memberships and collaborations' },
   mb_hiphop: { easy: 'record labels and collaborations', medium: 'record labels and collaborations', hard: 'record labels and collaborations' },

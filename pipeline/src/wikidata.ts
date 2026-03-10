@@ -225,6 +225,36 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
   ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 5)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'directed by'),
+  // Game → genre (P136) — e.g. Halo→first-person shooter, Civilization→turn-based strategy
+  // Bridges games that share a genre — "both are RPGs" connection
+  sq('easy', ['game', 'genre'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?a wdt:P31 wd:Q7889; wdt:P136 ?b.
+  ?b wdt:P31 wd:Q659563.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 20)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 20)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'belongs to genre'),
+  // Game → platform (P400) — iconic consoles only (N64, SNES, PS1/2/3, Xbox, Game Boy, Atari 2600, Sega Genesis)
+  // "Both were N64 games" is a satisfying surprise connection
+  sq('medium', ['game', 'platform'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  VALUES ?b { wd:Q184640 wd:Q183259 wd:Q172742 wd:Q10676 wd:Q10680 wd:Q10683 wd:Q132020 wd:Q48263 wd:Q186437 wd:Q206261 wd:Q269614 wd:Q8093 wd:Q15474 wd:Q10695 wd:Q11232 wd:Q10998 }
+  ?a wdt:P31 wd:Q7889; wdt:P400 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 25)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 80)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'available on'),
+  // Game → voice actor (P725) — real actors who voiced characters, bridges games via celebrity
+  // e.g. GTA V → Samuel L. Jackson (via San Andreas), Last of Us → Troy Baker
+  sq('hard', ['game', 'person'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?a wdt:P31 wd:Q7889; wdt:P725 ?b.
+  ?b wdt:P31 wd:Q5.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 20)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 30)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'voice acted by'),
 ]
 
 // Art: artwork → painter, painter → movement, painter → institution

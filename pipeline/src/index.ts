@@ -5,7 +5,7 @@ import { createClient } from '@supabase/supabase-js'
 import { CategoryDomain, SubqueryDifficulty } from './wikidata'
 import { fetchEntitiesCached } from './entityCache'
 import { buildGraph } from './graphBuilder'
-import { composePuzzleForDifficulty, Difficulty } from './puzzleComposer'
+import { composePuzzleForDifficulty, Difficulty, IntermediateFilterConfig } from './puzzleComposer'
 import { DOMAIN_CONFIG } from './domainConfig'
 import { generateNarrative } from './narrativeGenerator'
 import { evaluatePuzzle, CONNECTION_TYPES } from './puzzleQC'
@@ -30,6 +30,14 @@ const ANCHOR_TYPES: Record<string, string[]> = {
   food: ['dish', 'ingredient'],
   basketball: ['person', 'team'],
   americanfootball: ['person', 'team'],
+  videogames: ['game'],
+}
+
+// Domains where the anchor type can also appear as an intermediate node,
+// bridged via an "interesting" non-anchor type (person, location, genre, platform).
+// e.g. game → character → game → genre → game
+const INTERMEDIATE_BRIDGE_TYPES: Record<string, Set<string>> = {
+  videogames: new Set(['person', 'location', 'genre', 'platform']),
 }
 
 // Entity types that make unguessable bridge nodes — abstract offices, government
@@ -125,7 +133,11 @@ async function attemptDifficulty(
 
   console.log(`[${categoryName}/${difficulty}] Composing puzzle...`)
   const domainOverrides = DOMAIN_CONFIG[domain]
-  const puzzle = composePuzzleForDifficulty({ entities: filtered, graph, entityIds, targetDifficulty: difficulty, domainOverrides })
+  const anchorType = (ANCHOR_TYPES[domain] ?? [])[0]
+  const interestingTypes = INTERMEDIATE_BRIDGE_TYPES[domain]
+  const intermediateFilterConfig: IntermediateFilterConfig | undefined =
+    anchorType && interestingTypes ? { anchorType, interestingTypes } : undefined
+  const puzzle = composePuzzleForDifficulty({ entities: filtered, graph, entityIds, targetDifficulty: difficulty, domainOverrides, intermediateFilterConfig })
 
   if (!puzzle) return false
 

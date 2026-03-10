@@ -23,7 +23,7 @@ import { createClient } from '@supabase/supabase-js'
 import { CategoryDomain, SubqueryDifficulty } from '../wikidata'
 import { fetchEntitiesCached } from '../entityCache'
 import { buildGraph } from '../graphBuilder'
-import { composePuzzleForDifficulty, scorePathQuality, Difficulty, ComposedPuzzle } from '../puzzleComposer'
+import { composePuzzleForDifficulty, scorePathQuality, Difficulty, ComposedPuzzle, IntermediateFilterConfig } from '../puzzleComposer'
 import { generateNarrative } from '../narrativeGenerator'
 import { evaluatePuzzle, CONNECTION_TYPES } from '../puzzleQC'
 import { readDomainOverrides } from '../domainConfig'
@@ -89,6 +89,12 @@ const ANCHOR_TYPES: Record<string, string[]> = {
   food: ['dish', 'ingredient'],
   basketball: ['person', 'team'],
   americanfootball: ['person', 'team'],
+  videogames: ['game'],
+}
+
+// Mirror of index.ts INTERMEDIATE_BRIDGE_TYPES
+const INTERMEDIATE_BRIDGE_TYPES: Record<string, Set<string>> = {
+  videogames: new Set(['person', 'location', 'genre', 'platform']),
 }
 
 const UNGUESSABLE_TYPES = new Set(['office', 'field', 'category'])
@@ -203,7 +209,11 @@ async function runDifficulty(difficulty: Difficulty, entityLimit: number): Promi
   const graph = buildGraph(filtered)
   const entityIds = buildEntityIds(filtered, difficulty)
 
-  const puzzle = composePuzzleForDifficulty({ entities: filtered, graph, entityIds, targetDifficulty: difficulty, domainOverrides })
+  const anchorType = (ANCHOR_TYPES[domain] ?? [])[0]
+  const interestingTypes = INTERMEDIATE_BRIDGE_TYPES[domain]
+  const intermediateFilterConfig: IntermediateFilterConfig | undefined =
+    anchorType && interestingTypes ? { anchorType, interestingTypes } : undefined
+  const puzzle = composePuzzleForDifficulty({ entities: filtered, graph, entityIds, targetDifficulty: difficulty, domainOverrides, intermediateFilterConfig })
   if (!puzzle) {
     console.log(`[${domain}/${difficulty}] No puzzle composed (limit=${entityLimit})`)
     return null
