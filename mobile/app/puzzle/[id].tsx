@@ -98,6 +98,11 @@ export default function PuzzleScreen() {
   const [shuffledBubbles, setShuffledBubbles] = useState<typeof layoutBubbles | null>(null)
   const [showHintsFtue, setShowHintsFtue] = useState(false)
 
+  const [liveScore, setLiveScore] = useState(0)
+  const liveScoreRef = useRef(0)
+  const penaltyRef = useRef(0)
+  const [penaltyFlash, setPenaltyFlash] = useState<number | null>(null)
+
   useEffect(() => {
     AsyncStorage.getItem('hasSeenHintsFtue').then(val => {
       if (!val) setShowHintsFtue(true)
@@ -144,6 +149,20 @@ export default function PuzzleScreen() {
   }, [layoutBubbles.length])
 
   useEffect(() => {
+    if (!started) return
+    let animFrameId: number
+    const tick = () => {
+      const timeScore = computeLiveTimeScore(elapsed, difficulty)
+      const score = Math.max(0, timeScore - penaltyRef.current)
+      liveScoreRef.current = score
+      setLiveScore(score)
+      animFrameId = requestAnimationFrame(tick)
+    }
+    animFrameId = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(animFrameId)
+  }, [started, elapsed, difficulty])
+
+  useEffect(() => {
     if (alreadyCompleted) router.replace('/(tabs)')
   }, [alreadyCompleted])
 
@@ -159,25 +178,36 @@ export default function PuzzleScreen() {
 
   async function handlePathComplete(path: string[]) {
     const timeMs = stop()
-    const hops = path.length - 1
     const labelMap = Object.fromEntries(puzzle!.bubbles.map(b => [b.id, b.label]))
-    const nodeScores = computeNodeScores(path, puzzle!.optimal_path, puzzle!.difficulty ?? 'easy', labelMap)
-    const liveScore = computeLiveTimeScore(timeMs, puzzle!.difficulty ?? 'easy')
-    const score = computeFinalScore(liveScore, nodeScores)
+    const nodeScores = computeNodeScores(path, puzzle!.optimal_path, difficulty, labelMap)
+    const finalScore = computeFinalScore(liveScoreRef.current, nodeScores)
+    const nodeScoresParam = encodeURIComponent(JSON.stringify(nodeScores))
 
     const playerPathLabels = path.map(id => labelMap[id] ?? id).join('|')
     const optimalPathLabels = puzzle!.optimal_path.map(id => labelMap[id] ?? id).join('|')
 
     if (!puzzle!.id.startsWith('mock-') && userId) {
-      await submitRun({ puzzleId: puzzle!.id, userId, path, timeMs, score })
+      await submitRun({ puzzleId: puzzle!.id, userId, path, timeMs, score: finalScore })
     }
 
     const narrativeParam = puzzle!.narrative ? `&narrative=${encodeURIComponent(puzzle!.narrative)}` : ''
     const categoryParam = categoryName ? `&categoryName=${encodeURIComponent(categoryName)}` : ''
     const dateParam = puzzle!.date ? `&puzzleDate=${encodeURIComponent(puzzle!.date)}` : ''
     router.replace(
-      `/results/${puzzle!.id}?score=${score}&timeMs=${timeMs}&hops=${hops}&optimalHops=${optimalHops}&playerPath=${encodeURIComponent(playerPathLabels)}&optimalPath=${encodeURIComponent(optimalPathLabels)}&difficulty=${difficulty}${narrativeParam}${categoryParam}${dateParam}`
+      `/results/${puzzle!.id}?score=${finalScore}&timeMs=${timeMs}&hops=${path.length - 1}&optimalHops=${optimalHops}&playerPath=${encodeURIComponent(playerPathLabels)}&optimalPath=${encodeURIComponent(optimalPathLabels)}&difficulty=${difficulty}&liveScore=${liveScoreRef.current}&nodeScores=${nodeScoresParam}${narrativeParam}${categoryParam}${dateParam}`
     )
+  }
+
+  function handleBacktrack() {
+    penaltyRef.current += 25
+    setPenaltyFlash(-25)
+    setTimeout(() => setPenaltyFlash(null), 800)
+  }
+
+  function handleReset() {
+    penaltyRef.current += 100
+    setPenaltyFlash(-100)
+    setTimeout(() => setPenaltyFlash(null), 800)
   }
 
   async function handleUseHint(type: HintType) {
@@ -221,9 +251,6 @@ export default function PuzzleScreen() {
     }
   }
 
-  const timerColor = elapsed < 60000 ? colors.textPrimary : elapsed < 180000 ? '#d97706' : '#dc2626'
-  const minutes = Math.floor(elapsed / 60000)
-  const seconds = String(Math.floor((elapsed % 60000) / 1000)).padStart(2, '0')
   const hopColor = currentHops === 0 ? '#555' : currentHops <= optimalHops ? '#7c3aed' : '#eab308'
 
   return (
@@ -246,7 +273,14 @@ export default function PuzzleScreen() {
           </View>
         </View>
         <View style={styles.headerRight}>
-          <Text style={[styles.timer, { color: timerColor }]}>{minutes}:{seconds}</Text>
+          <View style={styles.scoreDisplay}>
+            <Text style={[styles.scoreNum, { color: liveScore > 200 ? colors.textPrimary : '#dc2626' }]}>
+              {liveScore}
+            </Text>
+            {penaltyFlash !== null && (
+              <Text style={styles.penaltyFlash}>{penaltyFlash}</Text>
+            )}
+          </View>
           <View style={styles.hopBadge}>
             <Text style={[styles.hopCount, { color: hopColor }]}>{currentHops}</Text>
             <Text style={styles.hopLabel}> / {optimalHops} hops</Text>
@@ -275,6 +309,8 @@ export default function PuzzleScreen() {
           flashPaths={flashPaths}
           onFlashComplete={() => { setFlashPaths(null); setActiveHint(null) }}
           bubbleScale={bubbleScale}
+          onBacktrack={handleBacktrack}
+          onReset={handleReset}
         />
       </View>
       <HintTray
@@ -337,8 +373,10 @@ const styles = StyleSheet.create({
   diffMedium: { color: '#d97706', backgroundColor: '#fffbeb' },
   diffHard: { color: '#dc2626', backgroundColor: '#fef2f2' },
   headerRight: { alignItems: 'flex-end', marginLeft: 12 },
-  timer: { fontSize: 18, fontWeight: '700', marginBottom: 2 },
-  hopBadge: { flexDirection: 'row', alignItems: 'baseline' },
+  scoreDisplay: { alignItems: 'flex-end' },
+  scoreNum: { fontSize: 22, fontWeight: '800' },
+  penaltyFlash: { color: '#dc2626', fontSize: 13, fontWeight: '700', textAlign: 'right' },
+  hopBadge: { flexDirection: 'row', alignItems: 'baseline', marginTop: 2 },
   hopCount: { fontSize: 15, fontWeight: '800' },
   hopLabel: { color: colors.textTertiary, fontSize: 12 },
   error: { color: colors.error, fontSize: 16, marginBottom: 20 },
