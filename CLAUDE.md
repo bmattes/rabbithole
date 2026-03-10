@@ -28,7 +28,7 @@ npx jest --no-coverage        # run tests
 
 **Starter categories for new users:** Movies + Soccer
 
-### Active Wikidata domains (25)
+### Active Wikidata domains (24)
 | Name | wikidata_domain | ID |
 |------|----------------|-----|
 | American Football | americanfootball | b607becf-ab90-4a35-9595-f6473612d364 |
@@ -43,7 +43,6 @@ npx jest --no-coverage        # run tests
 | Literature | literature | 3eb16608-c9a6-4bbe-854e-fcc7903fec63 |
 | Military History | military | c31fd646-f615-413e-9238-9987af82a93b |
 | Movies | movies | 5f522844-78b3-464f-9105-d15a8f746d28 |
-| Mythology | mythology | aa744d90-d46a-49bc-9226-ed73250f81ac |
 | Philosophy | philosophy | b6353186-74d1-49ab-b159-3bd2aa1b514c |
 | Pop Music | mb_pop | b8b69325-20c7-43c7-88d0-0b2cdc82de8d |
 | R&B / Soul | mb_rnb | 182d8ddc-d2b7-42a7-88fc-5ada2852a235 |
@@ -60,6 +59,7 @@ npx jest --no-coverage        # run tests
 ### Inactive / problematic domains
 | Name | wikidata_domain | Reason |
 |------|----------------|--------|
+| Mythology | mythology | Wikidata graph too small/slow — deity graph only 613 entities, Wikidata refresh consistently times out; set active=false 2026-03-10 |
 | Sport | sport | Medium/hard structurally broken — Wikidata multi-subquery timeouts; set active=false 2026-03-09 |
 | Tennis | tennis | Easy permanently impossible (graph too sparse, only 194 anchors); set active=false 2026-03-09 |
 | Electronic Music | mb_electronic | Deactivated (replaced by other music genres) |
@@ -101,9 +101,7 @@ Use `agent-loop.ts` — one subagent per domain, all dispatched in parallel. Eac
 npx ts-node src/scripts/agent-loop.ts --domain <domain> --date YYYY-MM-DD
 ```
 
-**To run all domains**: dispatch one `Agent` tool call per domain simultaneously (they are independent and safe to parallelize). Use `subagent_type: general-purpose`. Active Wikidata domains: `history`, `movies`, `soccer`, `science`, `geography`, `literature`, `philosophy`, `royals`, `military`, `mythology`, `space`, `food`, `comics`, `tv`, `videogames`, `art`, `tennis`, `basketball`, `americanfootball`. MusicBrainz: `mb_rock`, `mb_hiphop`, `mb_pop`, `mb_country`, `mb_rnb`.
-
-**MusicBrainz domains** (`mb_rock`, `mb_hiphop`, `mb_pop`, `mb_country`, `mb_rnb`) are slow on retries (~6 min each at 1 req/sec). Best to run them separately or skip if time-constrained — they use the same `agent-loop.ts` invocation.
+**To run all domains**: dispatch one `Agent` tool call per domain simultaneously (they are independent and safe to parallelize). Use `subagent_type: general-purpose`. Active Wikidata domains: `history`, `movies`, `soccer`, `science`, `geography`, `literature`, `philosophy`, `royals`, `military`, `space`, `food`, `comics`, `tv`, `videogames`, `art`, `basketball`, `americanfootball`. Music genres (Wikidata-backed, pass as `mb_*` domain name): `mb_rock`, `mb_hiphop`, `mb_pop`, `mb_country`, `mb_rnb`.
 
 **Before dispatching**: check what's already published to avoid redundant work:
 ```bash
@@ -124,7 +122,7 @@ Runs all 26 categories sequentially. Slower and harder to monitor — prefer the
 ## Pipeline — Domain-Specific Notes
 
 - **food, space**: country nodes (e.g. Egypt, Germany) create wrong-domain bridges — stripped via `COUNTRY_STRIP_DOMAINS` in `run-domain.ts`
-- **mythology**: small graph (258 entities), Wikidata timeouts on `--refresh-cache`. Always run without `--refresh-cache` or let the cache warm first
+- **mb_* music domains**: now Wikidata-backed (not MusicBrainz) — genre-filtered SPARQL subqueries, pageview enrichment works, no rate limiting. Hard difficulty tends toward label-hub paths; agent-loop auto-tunes `hubRelatedIdsThreshold` to fix this.
 - **tennis easy**: structurally impossible — person→team graph can't produce 4-hop paths with only 194 anchors; tennis easy will always fail
 - **sport**: medium/hard permanently broken (Wikidata multi-subquery timeouts); set `active=false`; easy works but not useful alone
 - **MusicBrainz domains** (mb_*): no Wikidata QIDs so `edge_labels` will always be empty — this is expected, not a bug
