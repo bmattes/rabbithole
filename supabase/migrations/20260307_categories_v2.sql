@@ -17,7 +17,7 @@ where name not in (
 insert into categories (name, wikidata_domain, active) values
   ('World History',     'history',        true),
   ('Movies',            'movies',         true),
-  ('Comics',            'comicvine',      true),
+  ('Comics',            'comics',         true),
   ('Hip-Hop',           'mb_hiphop',      true),
   ('Rock Music',        'mb_rock',        true),
   ('Pop Music',         'mb_pop',         true),

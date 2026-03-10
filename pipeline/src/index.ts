@@ -22,9 +22,12 @@ const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 const ANCHOR_TYPES: Record<string, string[]> = {
   movies: ['film'],
   sport: ['person', 'team', 'city'],
-  music: ['person', 'song'],
+  music: ['person'],
   science: ['person'],
   history: ['person'],
+  military: ['person'],
+  royals: ['person'],
+  food: ['dish', 'ingredient'],
   basketball: ['person', 'team'],
   americanfootball: ['person', 'team'],
 }
@@ -127,6 +130,13 @@ async function attemptDifficulty(
   if (!puzzle) return false
 
   const entityMap = new Map(filtered.map(e => [e.id, e]))
+
+  // Reject puzzles where start/end don't have labels in the entity map
+  if (!entityMap.has(puzzle.startId) || !entityMap.has(puzzle.endId)) {
+    console.log(`[${categoryName}/${difficulty}] ✗ Rejected: start/end has no label (${puzzle.startId} / ${puzzle.endId})`)
+    return false
+  }
+
   const pathLabels = puzzle.optimalPath.map(id => entityMap.get(id)?.label ?? id)
   console.log(`[${categoryName}/${difficulty}] Path: ${pathLabels.join(' → ')}`)
 

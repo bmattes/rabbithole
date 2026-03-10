@@ -152,6 +152,7 @@ export function scorePathQuality(
   optimalPath: string[],
   entityMap: Map<string, Entity>,
   graph: Graph,
+  hubThreshold = HUB_RELATEDIDS_THRESHOLD,
 ): PathQualityScore {
   const startEntity = entityMap.get(optimalPath[0])
   const endEntity = entityMap.get(optimalPath[optimalPath.length - 1])
@@ -192,7 +193,7 @@ export function scorePathQuality(
   // hubPenalty (-30 to 0): -10 per hub intermediate, max -30
   const hubCount = middleIds.filter(id => {
     const e = entityMap.get(id)
-    return e ? isHubEntity(e) : false
+    return e ? (e.relatedIds.length >= hubThreshold || e.entityType === 'category') : false
   }).length
   const hubPenalty = -Math.min(30, hubCount * 10)
 
@@ -313,7 +314,7 @@ export function composePuzzle({
   const difficulty = computeDifficulty(trueOptimalPath, pathCount, entityMap, params)
 
   // Reject paths that score too low on overall quality
-  const qualityScore = scorePathQuality(trueOptimalPath, entityMap, trimmedGraph)
+  const qualityScore = scorePathQuality(trueOptimalPath, entityMap, trimmedGraph, effectiveHubThreshold)
   if (qualityScore.total < effectiveMinQuality) return null
 
   return { startId, endId, bubbles, connections, optimalPath: trueOptimalPath, difficulty }
@@ -413,7 +414,7 @@ export function composePuzzleForDifficulty({
       const puzzle = composePuzzle({ entities, graph, startId, endId, targetBubbleCount, params: round.params, domainOverrides })
       if (puzzle && puzzle.difficulty === targetDifficulty) {
         const entityMap = new Map(entities.map(e => [e.id, e]))
-        const score = scorePathQuality(puzzle.optimalPath, entityMap, puzzle.connections as Graph)
+        const score = scorePathQuality(puzzle.optimalPath, entityMap, puzzle.connections as Graph, effectiveHubThreshold)
         // Only keep candidates above the effective quality floor
         if (score.total >= effectiveMinQuality) {
           candidates.push({ puzzle, score: score.total })

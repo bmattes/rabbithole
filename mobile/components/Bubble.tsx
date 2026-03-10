@@ -3,7 +3,7 @@ import { Text, StyleSheet, Animated } from 'react-native'
 import Svg, { Rect } from 'react-native-svg'
 import { colors } from '../lib/theme'
 
-export type BubbleState = 'idle' | 'active' | 'start' | 'end' | 'broken' | 'bridge'
+export type BubbleState = 'idle' | 'active' | 'start' | 'end' | 'broken' | 'bridge' | 'flash'
 
 interface BubbleProps {
   label: string
@@ -12,6 +12,7 @@ interface BubbleProps {
   index?: number
   pulse?: boolean
   hovering?: boolean
+  bubbleScale?: number
 }
 
 // Hit target size — used for layout and touch detection
@@ -32,17 +33,13 @@ const TEXT_COLORS: Record<BubbleState, string> = {
   end: '#fff',
   broken: '#ef4444',
   bridge: '#f59e0b',
+  flash: colors.textPrimary,
 }
 
-// Dwell ring geometry — rounded rect matching the idle bubble shape
-const RING_PAD = 4          // space between bubble edge and ring
-const RING_W = BUBBLE_W + 40 + RING_PAD * 2
-const RING_H = BUBBLE_H + RING_PAD * 2
-const RING_RX = BUBBLE_H / 2 + RING_PAD  // border-radius matches pill
-const RING_PERIMETER = 2 * (RING_W - 2 * RING_RX) + 2 * (RING_H - 2 * RING_RX) + 2 * Math.PI * RING_RX
+const RING_PAD = 4
 const AnimatedRect = Animated.createAnimatedComponent(Rect)
 
-export function Bubble({ label: rawLabel, state, position, index = 0, pulse, hovering }: BubbleProps) {
+export function Bubble({ label: rawLabel, state, position, index = 0, pulse, hovering, bubbleScale = 1 }: BubbleProps) {
   const label = rawLabel.charAt(0).toUpperCase() + rawLabel.slice(1)
   const translateY = useRef(new Animated.Value(40)).current
   const opacity = useRef(new Animated.Value(0)).current
@@ -83,7 +80,14 @@ export function Bubble({ label: rawLabel, state, position, index = 0, pulse, hov
   }, [hovering])
 
   const isPill = state === 'start' || state === 'end'
-  const displayW = isPill ? PILL_MAX_W : BUBBLE_W + 40
+  const displayW = (isPill ? PILL_MAX_W : BUBBLE_W + 40) * bubbleScale
+  const displayH = BUBBLE_H * bubbleScale
+  const fontSize = Math.round((isPill ? 14 : 15) * bubbleScale)
+  const borderRadius = displayH / 2
+  const RING_W = displayW + RING_PAD * 2
+  const RING_H = displayH + RING_PAD * 2
+  const RING_RX = displayH / 2 + RING_PAD
+  const RING_PERIMETER = 2 * (RING_W - 2 * RING_RX) + 2 * (RING_H - 2 * RING_RX) + 2 * Math.PI * RING_RX
 
   const strokeDashoffset = dwellProgress.interpolate({
     inputRange: [0, 1],
@@ -99,10 +103,13 @@ export function Bubble({ label: rawLabel, state, position, index = 0, pulse, hov
         state === 'idle' && styles.textNodeIdle,
         state === 'active' && styles.textNodeActive,
         state === 'bridge' && styles.textNodeBridge,
+        state === 'flash' && styles.textNodeFlash,
+        isPill && { borderRadius },
+        !isPill && { borderRadius, minHeight: displayH },
         {
           width: displayW,
           left: position.x - displayW / 2,
-          top: position.y - BUBBLE_H / 2,
+          top: position.y - displayH / 2,
         },
         { transform: [{ translateY }, { scale }], opacity },
       ]}
@@ -110,7 +117,7 @@ export function Bubble({ label: rawLabel, state, position, index = 0, pulse, hov
       <Text
         style={[
           isPill ? styles.pillLabel : styles.textLabel,
-          { color: TEXT_COLORS[state] },
+          { color: TEXT_COLORS[state], fontSize },
           state === 'active' && styles.textActive,
         ]}
       >
@@ -120,7 +127,7 @@ export function Bubble({ label: rawLabel, state, position, index = 0, pulse, hov
         <Svg
           width={RING_W}
           height={RING_H}
-          style={styles.dwellRing}
+          style={[styles.dwellRing, { top: -RING_PAD - 1.5, marginLeft: -RING_W / 2 }]}
           pointerEvents="none"
         >
           <AnimatedRect
@@ -173,11 +180,15 @@ const styles = StyleSheet.create({
     borderColor: '#f59e0b',
     backgroundColor: 'transparent',
   },
+  textNodeFlash: {
+    borderRadius: BUBBLE_H / 2,
+    borderWidth: 2,
+    borderColor: '#f59e0b',
+    backgroundColor: 'rgba(245, 158, 11, 0.12)',
+  },
   dwellRing: {
     position: 'absolute',
-    top: -RING_PAD - 1.5,
     left: '50%',
-    marginLeft: -RING_W / 2,
   },
   pillLabel: {
     fontSize: 14,

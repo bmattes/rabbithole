@@ -14,7 +14,7 @@
     },
     "ios": {
       "buildNumber": "2",
-      "supportsTablet": false,
+      "supportsTablet": true,
       "bundleIdentifier": "com.benmattes.rabbithole",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false

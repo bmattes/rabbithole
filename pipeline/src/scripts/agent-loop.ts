@@ -63,8 +63,8 @@ interface RoundResult {
 }
 
 // Run run-domain.ts with --dry-run and parse RESULT lines
-function runDryRun(extraArgs = ''): RoundResult[] {
-  const refreshFlag = FORCE_REFRESH ? '--refresh-cache' : ''
+function runDryRun(extraArgs = '', forceRefresh = false): RoundResult[] {
+  const refreshFlag = (FORCE_REFRESH || forceRefresh) ? '--refresh-cache' : ''
   const cmd = `npx ts-node ${SCRIPT_DIR}/run-domain.ts --domain ${domain} --date ${date} --dry-run ${refreshFlag} ${extraArgs}`
   console.log(`\n  $ ${cmd.trim()}`)
   let output = ''
@@ -106,14 +106,31 @@ function updateDomainConfig(overrides: DomainOverrides): void {
   console.log(`  [config] Updated ${domain}: ${JSON.stringify(overrides)}`)
 }
 
-// Diagnose failures and return suggested override adjustments
-function diagnose(results: RoundResult[], currentOverrides: DomainOverrides): DomainOverrides | null {
+interface DiagnoseResult {
+  overrides: DomainOverrides
+  forceRefresh: boolean
+}
+
+// Diagnose failures and return suggested override adjustments + whether to force-refresh entities
+function diagnose(results: RoundResult[], currentOverrides: DomainOverrides): DiagnoseResult | null {
   const failing = results.filter(r => !r.pass)
   const missing = 3 - results.length  // difficulties that produced no puzzle at all
 
   if (failing.length === 0 && missing === 0) return null  // all good
 
   const next: DomainOverrides = { ...currentOverrides }
+
+  // Check for "wrong_domain" issues — paths route through unrelated geographic/category nodes.
+  // The entity graph itself is the problem; force a fresh fetch with larger entity set so the
+  // composer has more domain-specific candidates to choose from.
+  const wrongDomainIssues = failing.flatMap(r => r.issues).filter(i => i.includes('wrong_domain') || i.includes('wrong domain'))
+  if (wrongDomainIssues.length > 0) {
+    // Also relax hub threshold slightly so same-domain hubs don't block paths
+    const cur = next.hubRelatedIdsThreshold ?? 50
+    next.hubRelatedIdsThreshold = Math.max(20, cur - 10)
+    console.log(`  [diagnose] Wrong-domain bridges — force-refreshing entities, lowering hubThreshold to ${next.hubRelatedIdsThreshold}`)
+    return { overrides: next, forceRefresh: true }
+  }
 
   // If puzzles aren't composing at all — graph too sparse after filtering
   if (missing > 0 || results.length === 0) {
@@ -122,7 +139,7 @@ function diagnose(results: RoundResult[], currentOverrides: DomainOverrides): Do
     const curHub = next.maxHubRatio ?? 0.0
     next.maxHubRatio = Math.min(0.5, curHub + 0.15)
     console.log(`  [diagnose] No puzzle produced — loosening quality floor to ${next.minQualityScore}, hubRatio to ${next.maxHubRatio}`)
-    return next
+    return { overrides: next, forceRefresh: false }
   }
 
   // Check for "abstract" issues — intermediates are too generic
@@ -132,7 +149,7 @@ function diagnose(results: RoundResult[], currentOverrides: DomainOverrides): Do
     const cur = next.hubRelatedIdsThreshold ?? 50
     next.hubRelatedIdsThreshold = Math.max(5, cur - 10)
     console.log(`  [diagnose] Abstract intermediates — lowering hubThreshold to ${next.hubRelatedIdsThreshold}`)
-    return next
+    return { overrides: next, forceRefresh: false }
   }
 
   // Check for "obscure" issues — endpoints or intermediates too unknown
@@ -142,14 +159,14 @@ function diagnose(results: RoundResult[], currentOverrides: DomainOverrides): Do
     const cur = next.minQualityScore ?? 40
     next.minQualityScore = Math.max(10, cur - 8)
     console.log(`  [diagnose] Obscure connections — lowering minQualityScore to ${next.minQualityScore}`)
-    return next
+    return { overrides: next, forceRefresh: false }
   }
 
   // Generic: just lower quality floor slightly
   const cur = next.minQualityScore ?? 40
   next.minQualityScore = Math.max(10, cur - 5)
   console.log(`  [diagnose] General failures — lowering minQualityScore to ${next.minQualityScore}`)
-  return next
+  return { overrides: next, forceRefresh: false }
 }
 
 async function run() {
@@ -162,13 +179,15 @@ async function run() {
 
   let lastResults: RoundResult[] = []
   let round = 0
+  let nextForceRefresh = false  // escalate to force-refresh when diagnosis requests it
 
   while (round < MAX_ROUNDS) {
     round++
     console.log(`\n--- Round ${round}/${MAX_ROUNDS} ---`)
 
     clearDrafts()  // ensure publish pass gets fresh drafts from this round
-    lastResults = runDryRun()
+    lastResults = runDryRun('', nextForceRefresh)
+    nextForceRefresh = false  // reset after use
 
     const passing = lastResults.filter(r => r.pass).length
     const total = lastResults.length
@@ -183,19 +202,27 @@ async function run() {
     }
 
     // Diagnose and update config
-    const suggested = diagnose(lastResults, currentOverrides)
-    if (!suggested) {
+    const diagnosis = diagnose(lastResults, currentOverrides)
+    if (!diagnosis) {
       console.log('  No further adjustments possible.')
       break
     }
 
-    // Only update if something actually changed
+    const { overrides: suggested, forceRefresh: shouldRefresh } = diagnosis
+
+    // If diagnosis requests a cache refresh, schedule it for next round
+    if (shouldRefresh) nextForceRefresh = true
+
+    // Update config if something changed; if unchanged but refresh is requested, still continue
     if (JSON.stringify(suggested) !== JSON.stringify(currentOverrides)) {
       currentOverrides = suggested
       updateDomainConfig(currentOverrides)
-    } else {
-      console.log('  Config unchanged — stopping early.')
+    } else if (!shouldRefresh) {
+      // Nothing changed and no refresh scheduled — no point retrying
+      console.log('  Config unchanged and no refresh needed — stopping early.')
       break
+    } else {
+      console.log('  Config unchanged but forcing entity refresh next round.')
     }
   }
 

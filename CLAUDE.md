@@ -24,16 +24,55 @@ npx jest --no-coverage        # run tests
 - Migrations: `supabase/migrations/`
 - Must be applied manually via Supabase Dashboard → SQL Editor
 
-## Category IDs (Production)
-| Name    | ID |
-|---------|----|
-| History | f003887c-34ab-4a50-b2e3-db96f378cbdd |
-| Movies  | 5f522844-78b3-464f-9105-d15a8f746d28 |
-| Music   | bf80e8ab-7532-42f4-b717-1dc4b5ca4534 |
-| Science | 55dcfe2f-84d7-44d6-9558-97de003c436e |
-| Sport   | 945573e5-1c76-4bd3-b2a6-961276e1c224 |
+## Categories (Production)
 
-**Starter categories for new users:** Movies + Sport
+**Starter categories for new users:** Movies + Soccer
+
+### Active Wikidata domains (25)
+| Name | wikidata_domain | ID |
+|------|----------------|-----|
+| American Football | americanfootball | b607becf-ab90-4a35-9595-f6473612d364 |
+| Basketball | basketball | 3d5fd2ac-6e6a-4e87-98e8-6efbcb52c9fd |
+| Classical Music | music | 43b3e56b-c343-43ca-836d-0b33cfb05d3e |
+| Comics | comics | e9bf593d-966b-424b-9b97-13e0b18577fe |
+| Country Music | mb_country | 1aa0ea06-222b-4331-822b-325bd53cd5ea |
+| Food & Cuisine | food | 3f05b508-d942-4fca-81e9-4a1d036b2808 |
+| Football / Soccer | soccer | e8330146-febe-45ca-97ca-8999d2c6f30d |
+| Geography | geography | bfe96173-55b2-48ba-8f48-0fc0b6f7c48a |
+| Hip-Hop | mb_hiphop | 148643e8-d8b0-49bd-a0f9-0cfd9ba8024e |
+| Literature | literature | 3eb16608-c9a6-4bbe-854e-fcc7903fec63 |
+| Military History | military | c31fd646-f615-413e-9238-9987af82a93b |
+| Movies | movies | 5f522844-78b3-464f-9105-d15a8f746d28 |
+| Mythology | mythology | aa744d90-d46a-49bc-9226-ed73250f81ac |
+| Philosophy | philosophy | b6353186-74d1-49ab-b159-3bd2aa1b514c |
+| Pop Music | mb_pop | b8b69325-20c7-43c7-88d0-0b2cdc82de8d |
+| R&B / Soul | mb_rnb | 182d8ddc-d2b7-42a7-88fc-5ada2852a235 |
+| Rock Music | mb_rock | 7b932160-d1a9-43b6-b165-4e3e826a7da2 |
+| Royals & Monarchs | royals | 8a6efe6b-047a-4883-ad8f-b8bdd1c79345 |
+| Science | science | 55dcfe2f-84d7-44d6-9558-97de003c436e |
+| Space & Astronomy | space | 59b7e254-b17f-4d69-8554-6e45d1084839 |
+| Tennis | tennis | 8099cae3-0c71-4af2-83e1-9ef2ec183203 |
+| TV Shows | tv | b705171c-177e-4a32-b82d-d0b968c8e72f |
+| Video Games | videogames | 6314e218-91c5-4a29-abb6-8aa8db8b4177 |
+| Visual Art | art | 4b06167c-5cb6-448f-aa91-06272425e835 |
+| World History | history | 4509f7c8-ca02-49b7-a6ab-113523b02cc3 |
+
+### Inactive / problematic domains
+| Name | wikidata_domain | Reason |
+|------|----------------|--------|
+| Sport | sport | Medium/hard structurally broken — Wikidata multi-subquery timeouts; set active=false 2026-03-09 |
+| Tennis | tennis | Easy permanently impossible (graph too sparse, only 194 anchors); set active=false 2026-03-09 |
+| Electronic Music | mb_electronic | Deactivated (replaced by other music genres) |
+| History (old) | history | Duplicate — World History row is the active one |
+| Music (old) | music | Duplicate — Classical Music row is the active one |
+
+### Adding a new domain
+1. Add SPARQL subqueries to `pipeline/src/wikidata.ts` — add a new `SUBQUERY_MAP[domain]` entry with `sq()` calls (each with an edge label 4th param)
+2. Add anchor types to `ANCHOR_TYPES` in both `pipeline/src/index.ts` and `pipeline/src/scripts/run-domain.ts`
+3. If country nodes cause wrong-domain bridges, add domain to `COUNTRY_STRIP_DOMAINS` in `run-domain.ts`
+4. Insert category row in Supabase `categories` table (`name`, `wikidata_domain`, `active=true`)
+5. Add `CONNECTION_TYPES[domain]` entry in `pipeline/src/puzzleQC.ts`
+6. Test: `npx ts-node src/scripts/agent-loop.ts --domain <domain> --date YYYY-MM-DD`
 
 ## Progression System
 - XP: Easy=100, Medium=200, Hard=350 base + optimal path bonus (+50) + speed bonus (up to +50) + streak bonus (25×day)
@@ -46,6 +85,58 @@ npx jest --no-coverage        # run tests
 - Free: today's puzzle + 7-day archive, all unlocked categories/difficulties
 - Paid: full archive (30+ days) + leaderboard badge
 - RevenueCat integration: not yet wired (SubscribeModal is UI-only stub)
+
+## Pipeline — Generating Puzzles
+
+### Preferred: Parallel agent-loop per domain
+
+Use `agent-loop.ts` — one subagent per domain, all dispatched in parallel. Each agent:
+1. Runs dry-run QC for all 3 difficulties
+2. Diagnoses failures and adjusts `DOMAIN_CONFIG` (hub threshold, quality floor, etc.)
+3. Retries up to 6 rounds until all 3 pass
+4. Publishes passing puzzles; partial publish if some difficulties still fail
+
+```bash
+# From pipeline/ directory:
+npx ts-node src/scripts/agent-loop.ts --domain <domain> --date YYYY-MM-DD
+```
+
+**To run all domains**: dispatch one `Agent` tool call per domain simultaneously (they are independent and safe to parallelize). Use `subagent_type: general-purpose`. Active Wikidata domains: `history`, `movies`, `soccer`, `science`, `geography`, `literature`, `philosophy`, `royals`, `military`, `mythology`, `space`, `food`, `comics`, `tv`, `videogames`, `art`, `tennis`, `basketball`, `americanfootball`. MusicBrainz: `mb_rock`, `mb_hiphop`, `mb_pop`, `mb_country`, `mb_rnb`.
+
+**MusicBrainz domains** (`mb_rock`, `mb_hiphop`, `mb_pop`, `mb_country`, `mb_rnb`) are slow on retries (~6 min each at 1 req/sec). Best to run them separately or skip if time-constrained — they use the same `agent-loop.ts` invocation.
+
+**Before dispatching**: check what's already published to avoid redundant work:
+```bash
+# From pipeline/ directory:
+node check-today.js   # lists categories missing puzzles for today
+```
+
+**Entity caches** live in `pipeline/.entity-cache/` (7-day TTL). First attempt uses cache; retries force-refresh. Caches ARE used — slow retries are due to force-refresh + MusicBrainz rate limiting, not cache misses.
+
+**Puzzle date**: always use today's date so tomorrow's run doesn't stomp. Pass `--date YYYY-MM-DD` explicitly.
+
+### Legacy sequential runner
+```bash
+cd pipeline && npx ts-node src/index.ts --date YYYY-MM-DD
+```
+Runs all 26 categories sequentially. Slower and harder to monitor — prefer the parallel agent approach above.
+
+## Pipeline — Domain-Specific Notes
+
+- **food, space**: country nodes (e.g. Egypt, Germany) create wrong-domain bridges — stripped via `COUNTRY_STRIP_DOMAINS` in `run-domain.ts`
+- **mythology**: small graph (258 entities), Wikidata timeouts on `--refresh-cache`. Always run without `--refresh-cache` or let the cache warm first
+- **tennis easy**: structurally impossible — person→team graph can't produce 4-hop paths with only 194 anchors; tennis easy will always fail
+- **sport**: medium/hard permanently broken (Wikidata multi-subquery timeouts); set `active=false`; easy works but not useful alone
+- **MusicBrainz domains** (mb_*): no Wikidata QIDs so `edge_labels` will always be empty — this is expected, not a bug
+- **Domain config overrides**: live in `pipeline/.entity-cache/domain-config/<domain>.json` — written by agent-loop, read at compose time. Keys: `minQualityScore`, `maxHubRatio`, `hubRelatedIdsThreshold`, `minAnchorFamiliarity`, `maxMutualNeighbors`
+
+## edge_labels
+
+Each puzzle has `edge_labels: Record<string, string>` — a map from `"entityIdA|entityIdB"` to a human-readable relationship like `"fought in"` or `"member of"`. Populated during entity fetch from the `edgeLabel` param on each `sq()` SPARQL subquery. Used by the mobile app to show a hint pill when the player drags between connected bubbles.
+
+- **DB column**: `puzzles.edge_labels` (jsonb, nullable)
+- **Pipeline**: `fetchEntitiesCached` returns `{ entities, edgeLabels }` — threaded through composer and stored on publish
+- **Mobile**: read via `puzzle.edge_labels` from Supabase, passed as `edgeLabels` prop to `PuzzleCanvas`
 
 ## Known Stubs / TODO
 - `streakDay` in results screen is hardcoded to `0` — needs real streak value wired in

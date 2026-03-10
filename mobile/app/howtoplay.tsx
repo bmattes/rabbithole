@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { View, Text, Pressable, StyleSheet, ScrollView, Dimensions } from 'react-native'
+import Svg, { Path } from 'react-native-svg'
 import { router } from 'expo-router'
 import { colors } from '../lib/theme'
 
@@ -14,8 +15,8 @@ const STEPS = [
   },
   {
     emoji: '🫧',
-    title: 'Tap bubbles to hop',
-    body: 'Bubbles are connected to each other. Tap one to add it to your path. Tap again to backtrack. Find a route from Start to End.',
+    title: 'Drag to connect',
+    body: 'Drag a line from one bubble to a connected one to hop. Drag backward to undo. Find a route from Start to End.',
     visual: <BubbleVisual />,
   },
   {
@@ -50,44 +51,113 @@ function StartEndVisual() {
   )
 }
 
+// Fixed bubble positions for the visual — laid out to look like a real puzzle
+const BV_W = 260
+const BV_H = 200
+const BV_BUBBLES = [
+  { label: 'Monaco',     x: 130, y: 20,  state: 'start' },
+  { label: 'Europe',     x: 130, y: 90,  state: 'active' },
+  { label: 'Kazakhstan', x: 30,  y: 155, state: 'idle' },
+  { label: 'Asia',       x: 130, y: 155, state: 'idle' },
+  { label: 'Turkey',     x: 230, y: 155, state: 'end' },
+]
+// Lines: [fromIndex, toIndex, active]
+const BV_LINES = [
+  { from: 0, to: 1, active: true },
+  { from: 1, to: 4, active: false }, // the path continues to Turkey (dashed — not yet traced)
+  { from: 1, to: 2, active: false },
+  { from: 1, to: 3, active: false },
+]
+
 function BubbleVisual() {
   return (
-    <View style={v.container}>
-      <View style={v.bubbleRow}>
-        <View style={[v.bubble, v.bubbleActive]}><Text style={v.bubbleTextActive}>Monaco</Text></View>
-        <View style={[v.bubble, v.bubbleActive]}><Text style={v.bubbleTextActive}>Europe</Text></View>
-      </View>
-      <View style={v.bubbleRow}>
-        <View style={[v.bubble, v.bubbleIdle]}><Text style={v.bubbleTextIdle}>Kazakhstan</Text></View>
-        <View style={[v.bubble, v.bubbleIdle]}><Text style={v.bubbleTextIdle}>Asia</Text></View>
-      </View>
-      <View style={v.bubbleRow}>
-        <View style={[v.bubble, v.bubbleIdle]}><Text style={v.bubbleTextIdle}>Turkey</Text></View>
-      </View>
+    <View style={{ width: BV_W, height: BV_H }}>
+      <Svg width={BV_W} height={BV_H} style={StyleSheet.absoluteFill} pointerEvents="none">
+        {BV_LINES.map((l, i) => {
+          const from = BV_BUBBLES[l.from]
+          const to = BV_BUBBLES[l.to]
+          const d = `M ${from.x} ${from.y} C ${from.x} ${(from.y + to.y) / 2}, ${to.x} ${(from.y + to.y) / 2}, ${to.x} ${to.y}`
+          return (
+            <Path
+              key={i}
+              d={d}
+              stroke={l.active ? colors.accent : colors.border}
+              strokeWidth={l.active ? 3 : 1.5}
+              strokeDasharray={l.active ? undefined : '5,4'}
+              fill="none"
+              strokeLinecap="round"
+              opacity={l.active ? 1 : 0.6}
+            />
+          )
+        })}
+      </Svg>
+      {BV_BUBBLES.map((b) => {
+        const isStart = b.state === 'start'
+        const isEnd = b.state === 'end'
+        const isActive = b.state === 'active'
+        const isPill = isStart || isEnd
+        return (
+          <View
+            key={b.label}
+            style={[
+              v.bvBubble,
+              isPill && (isStart ? v.bvStart : v.bvEnd),
+              isActive && v.bvActive,
+              !isPill && !isActive && v.bvIdle,
+              { left: b.x, top: b.y, transform: [{ translateX: -45 }, { translateY: -14 }] },
+            ]}
+          >
+            <Text style={[v.bvText, (isPill || isActive) && v.bvTextBright]}>{b.label}</Text>
+          </View>
+        )
+      })}
     </View>
   )
 }
 
 function HopsVisual() {
+  const optimalNodes = ['Monaco', 'Europe', 'Turkey']
+  const playerNodes = ['Monaco', 'Europe', 'Asia', 'Turkey']
   return (
     <View style={v.container}>
-      <View style={v.hopsRow}>
-        <View style={v.hopsCol}>
-          <Text style={v.hopsLabel}>Your path</Text>
-          <Text style={v.hopsNum}>4 hops</Text>
-          <View style={v.scoreBadge}>
-            <Text style={v.scoreText}>620 pts</Text>
-          </View>
+      {/* Optimal path */}
+      <View style={v.pathRow}>
+        <View style={v.pathLabelCol}>
+          <Text style={v.pathLabel}>Optimal</Text>
+          <Text style={[v.pathHops, { color: colors.accent }]}>3 hops ✓</Text>
         </View>
-        <View style={v.hopsDivider} />
-        <View style={v.hopsCol}>
-          <Text style={v.hopsLabel}>Optimal</Text>
-          <Text style={[v.hopsNum, { color: colors.accent }]}>3 hops</Text>
-          <View style={[v.scoreBadge, v.scoreBadgeOptimal]}>
-            <Text style={[v.scoreText, { color: colors.accent }]}>850 pts</Text>
-          </View>
+        <View style={v.pathBubbles}>
+          {optimalNodes.map((n, i) => (
+            <View key={n} style={v.pathStep}>
+              <View style={[v.pathBubble, i === 0 && v.pathBubbleStart, i === optimalNodes.length - 1 && v.pathBubbleEnd, i > 0 && i < optimalNodes.length - 1 && v.pathBubbleOptimal]}>
+                <Text style={[v.pathBubbleText, (i === 0 || i === optimalNodes.length - 1) && v.pathBubbleTextPill]}>{n}</Text>
+              </View>
+              {i < optimalNodes.length - 1 && <Text style={v.pathArrow}>→</Text>}
+            </View>
+          ))}
         </View>
       </View>
+
+      <View style={v.hopsDivider} />
+
+      {/* Player path */}
+      <View style={v.pathRow}>
+        <View style={v.pathLabelCol}>
+          <Text style={v.pathLabel}>You</Text>
+          <Text style={[v.pathHops, { color: '#d97706' }]}>4 hops</Text>
+        </View>
+        <View style={v.pathBubbles}>
+          {playerNodes.map((n, i) => (
+            <View key={n} style={v.pathStep}>
+              <View style={[v.pathBubble, i === 0 && v.pathBubbleStart, i === playerNodes.length - 1 && v.pathBubbleEnd, i > 0 && i < playerNodes.length - 1 && v.pathBubbleIdle]}>
+                <Text style={[v.pathBubbleText, (i === 0 || i === playerNodes.length - 1) && v.pathBubbleTextPill]}>{n}</Text>
+              </View>
+              {i < playerNodes.length - 1 && <Text style={v.pathArrow}>→</Text>}
+            </View>
+          ))}
+        </View>
+      </View>
+
       <Text style={v.hopsHint}>Match the optimal path for full score</Text>
     </View>
   )
@@ -196,22 +266,46 @@ const v = StyleSheet.create({
   pillText: { color: colors.accent, fontSize: 15, fontWeight: '700' },
   arrow: { color: colors.textTertiary, fontSize: 16 },
 
-  bubbleRow: { flexDirection: 'row', gap: 10, marginVertical: 5 },
-  bubble: { borderRadius: 100, paddingHorizontal: 16, paddingVertical: 8, borderWidth: 1.5 },
-  bubbleActive: { borderColor: colors.accent, backgroundColor: colors.accentLight },
-  bubbleIdle: { borderColor: colors.border, backgroundColor: colors.bgCard },
-  bubbleTextActive: { color: colors.accent, fontWeight: '700', fontSize: 13 },
-  bubbleTextIdle: { color: colors.textSecondary, fontSize: 13 },
+  bvBubble: {
+    position: 'absolute',
+    width: 90,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+  },
+  bvStart: { backgroundColor: '#16a34a', borderColor: '#16a34a' },
+  bvEnd: { backgroundColor: '#dc2626', borderColor: '#dc2626' },
+  bvActive: { borderColor: colors.accent, backgroundColor: colors.accentLight },
+  bvIdle: { borderColor: colors.border, backgroundColor: colors.bgCard },
+  bvText: { fontSize: 11, fontWeight: '600', color: colors.textSecondary },
+  bvTextBright: { color: '#fff' },
 
-  hopsRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  hopsCol: { flex: 1, alignItems: 'center' },
-  hopsDivider: { width: 1, height: 60, backgroundColor: colors.border },
-  hopsLabel: { color: colors.textTertiary, fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 },
-  hopsNum: { color: colors.textPrimary, fontSize: 22, fontWeight: '800', marginBottom: 6 },
-  scoreBadge: { backgroundColor: colors.bgCardAlt, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
-  scoreBadgeOptimal: { backgroundColor: colors.accentLight },
-  scoreText: { color: colors.textSecondary, fontSize: 13, fontWeight: '700' },
-  hopsHint: { color: colors.textTertiary, fontSize: 12, textAlign: 'center' },
+  hopsDivider: { height: 1, width: '100%', backgroundColor: colors.border, marginVertical: 12 },
+  hopsHint: { color: colors.textTertiary, fontSize: 12, textAlign: 'center', marginTop: 8 },
+
+  pathRow: { width: '100%', flexDirection: 'row', alignItems: 'center', gap: 10 },
+  pathLabelCol: { width: 52, alignItems: 'flex-end' },
+  pathLabel: { color: colors.textTertiary, fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.3 },
+  pathHops: { fontSize: 11, fontWeight: '700' },
+  pathBubbles: { flex: 1, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 2 },
+  pathStep: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  pathArrow: { color: colors.textTertiary, fontSize: 10 },
+  pathBubble: {
+    borderRadius: 100,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.bgCardAlt,
+  },
+  pathBubbleStart: { backgroundColor: '#16a34a', borderColor: '#16a34a' },
+  pathBubbleEnd: { backgroundColor: '#dc2626', borderColor: '#dc2626' },
+  pathBubbleOptimal: { borderColor: colors.accent, backgroundColor: colors.accentLight },
+  pathBubbleIdle: { borderColor: colors.border, backgroundColor: colors.bgCardAlt },
+  pathBubbleText: { color: colors.textSecondary, fontSize: 11, fontWeight: '600' },
+  pathBubbleTextPill: { color: '#fff' },
 
   streakRow: { flexDirection: 'row', gap: 8, marginBottom: 14 },
   streakDay: {
@@ -248,7 +342,7 @@ const styles = StyleSheet.create({
     padding: 24,
     alignItems: 'center',
   },
-  dots: { flexDirection: 'row', gap: 8, marginTop: 24, marginBottom: 16 },
+  dots: { flexDirection: 'row', gap: 8, marginTop: 24, marginBottom: 16, justifyContent: 'center' },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.border },
   dotActive: { width: 24, backgroundColor: colors.accent },
   footer: { paddingHorizontal: 24, paddingBottom: 48, width: '100%', gap: 4 },

@@ -348,12 +348,20 @@ export async function saveUnlockedCategories(userId: string, categoryIds: string
 
 export async function getPathStats(
   puzzleId: string,
-  playerHops: number
+  playerHops: number,
+  optimalHops: number,
+  userId?: string | null
 ): Promise<{ totalPlayers: number; optimalPathPct: number; sameHopsPct: number }> {
-  const { data, error } = await supabase
+  let query = supabase
     .from('player_runs')
     .select('path')
     .eq('puzzle_id', puzzleId)
+
+  if (userId) {
+    query = query.neq('user_id', userId)
+  }
+
+  const { data, error } = await query
 
   if (error || !data || data.length === 0) {
     return { totalPlayers: 0, optimalPathPct: 0, sameHopsPct: 0 }
@@ -361,8 +369,7 @@ export async function getPathStats(
 
   const total = data.length
   const hopCounts = data.map(r => (r.path as string[]).length - 1)
-  const minHops = Math.min(...hopCounts)
-  const optimalCount = hopCounts.filter(h => h === minHops).length
+  const optimalCount = hopCounts.filter(h => h === optimalHops).length
   const sameHopsCount = hopCounts.filter(h => h === playerHops).length
 
   return {

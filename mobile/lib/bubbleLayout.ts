@@ -1,8 +1,7 @@
 import { BUBBLE_W, BUBBLE_H } from '../components/Bubble'
 
+const BASE_BUBBLE_W = BUBBLE_W + 40  // matches displayW for idle/active bubbles in Bubble.tsx
 const MIN_GAP = 16
-const MIN_DIST_X = BUBBLE_W + MIN_GAP
-const MIN_DIST_Y = BUBBLE_H + MIN_GAP
 
 interface Point { x: number; y: number }
 
@@ -20,29 +19,41 @@ function seededRandom(seed: number) {
  * axis-aligned force-separation to resolve overlaps — giving an
  * organic feel while guaranteeing everything fits on screen.
  */
+// Safe zone reserved at top and bottom for start/end nodes (scaled at call site)
+
 export function separateBubbles(
   positions: Point[],
   canvasWidth: number,
   canvasHeight: number,
   fixedIndices: Set<number> = new Set(),
-  iterations = 200
+  iterations = 200,
+  seed?: number,
+  bubbleScale = 1
 ): Point[] {
+  const bw = BASE_BUBBLE_W * bubbleScale
+  const bh = BUBBLE_H * bubbleScale
+  const MIN_DIST_X = bw + MIN_GAP
+  const MIN_DIST_Y = bh + MIN_GAP
   const n = positions.length
-  const padX = BUBBLE_W / 2 + 10
-  const padY = BUBBLE_H / 2 + 10
-  const rand = seededRandom(n * 1000 + Math.round(canvasWidth))
-
+  const padX = bw / 2 + 10
+  const PILL_PAD = 10  // paddingVertical on pill nodes — grows downward from top anchor
+  const padY = bh / 2 + 8
+  const padYBottom = bh / 2 + PILL_PAD + 8
+  // Intermediates are restricted to the band between the two anchor zones
+  const anchorReserve = bh + 24
+  const midYMin = padY + anchorReserve
+  const midYMax = canvasHeight - padYBottom - anchorReserve
+  const rand = seededRandom(seed ?? (n * 1000 + Math.round(canvasWidth)))
   const pts: Point[] = positions.map((p, i) => {
     if (fixedIndices.has(i)) {
-      // Fixed indices keep their relative vertical position but centre horizontally
       if (i === 0) return { x: canvasWidth / 2, y: padY }
-      if (i === n - 1) return { x: canvasWidth / 2, y: canvasHeight - padY }
+      if (i === n - 1) return { x: canvasWidth / 2, y: canvasHeight - padYBottom }
       return { ...p }
     }
-    // Random scatter across the full canvas area
+    // Scatter intermediates only within the safe middle band
     return {
       x: padX + rand() * (canvasWidth - padX * 2),
-      y: padY + rand() * (canvasHeight - padY * 2),
+      y: midYMin + rand() * Math.max(midYMax - midYMin, 0),
     }
   })
 
@@ -71,7 +82,8 @@ export function separateBubbles(
     for (let i = 0; i < n; i++) {
       if (fixedIndices.has(i)) continue
       pts[i].x = Math.max(padX, Math.min(canvasWidth - padX, pts[i].x))
-      pts[i].y = Math.max(padY, Math.min(canvasHeight - padY, pts[i].y))
+      // Clamp intermediates to the safe middle band
+      pts[i].y = Math.max(midYMin, Math.min(midYMax, pts[i].y))
     }
     if (!moved) break
   }

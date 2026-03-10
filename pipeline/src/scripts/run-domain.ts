@@ -81,17 +81,24 @@ const date = dateArg
 const ANCHOR_TYPES: Record<string, string[]> = {
   movies: ['film'],
   sport: ['person', 'team', 'city'],
-  music: ['person', 'song'],
+  music: ['person'],
   science: ['person'],
   history: ['person'],
+  military: ['person'],
+  royals: ['person'],
+  food: ['dish', 'ingredient'],
   basketball: ['person', 'team'],
   americanfootball: ['person', 'team'],
 }
 
 const UNGUESSABLE_TYPES = new Set(['office', 'field', 'category'])
+// For food/space domains: country nodes create wrong_domain bridges — strip them from the graph
+const FOOD_UNGUESSABLE_TYPES = new Set(['office', 'field', 'category', 'country'])
+const COUNTRY_STRIP_DOMAINS = new Set(['food', 'space'])
 
-function filterEntities(entities: any[]): any[] {
-  const isBad = (e: any) => UNGUESSABLE_TYPES.has(e.entityType) || /^Q\d+$/.test(e.label ?? '')
+function filterEntities(entities: any[], domainName?: string): any[] {
+  const types = (domainName && COUNTRY_STRIP_DOMAINS.has(domainName)) ? FOOD_UNGUESSABLE_TYPES : UNGUESSABLE_TYPES
+  const isBad = (e: any) => types.has(e.entityType) || /^Q\d+$/.test(e.label ?? '')
   const badIds = new Set(entities.filter(isBad).map((e: any) => e.id))
   if (badIds.size === 0) return entities
   return entities
@@ -157,7 +164,7 @@ async function runDifficulty(difficulty: Difficulty, entityLimit: number): Promi
       // Re-fetch entities only for narrative generation (need labels)
       const maxDifficulty = DIFFICULTY_TO_MAX_SUBQUERY[difficulty]
       const { entities: rawEntities } = await fetchEntitiesCached(domain, entityLimit, { forceRefresh: false, maxDifficulty })
-      const filtered = filterEntities(rawEntities)
+      const filtered = filterEntities(rawEntities, domain)
       const entityMap = new Map(filtered.map((e: any) => [e.id, e]))
       const pathLabels = draft.pathLabels
 
@@ -192,7 +199,7 @@ async function runDifficulty(difficulty: Difficulty, entityLimit: number): Promi
   // Compose fresh puzzle
   const maxDifficulty = DIFFICULTY_TO_MAX_SUBQUERY[difficulty]
   const { entities: rawEntities, edgeLabels } = await fetchEntitiesCached(domain, entityLimit, { forceRefresh: FORCE_REFRESH, maxDifficulty })
-  const filtered = filterEntities(rawEntities)
+  const filtered = filterEntities(rawEntities, domain)
   const graph = buildGraph(filtered)
   const entityIds = buildEntityIds(filtered, difficulty)
 
@@ -204,7 +211,7 @@ async function runDifficulty(difficulty: Difficulty, entityLimit: number): Promi
 
   const entityMap = new Map(filtered.map((e: any) => [e.id, e]))
   const pathLabels = puzzle.optimalPath.map(id => entityMap.get(id)?.label ?? id)
-  const qScore = scorePathQuality(puzzle.optimalPath, entityMap as any, puzzle.connections as any)
+  const qScore = scorePathQuality(puzzle.optimalPath, entityMap as any, puzzle.connections as any, domainOverrides?.hubRelatedIdsThreshold)
 
   console.log(`[${domain}/${difficulty}] Path: ${pathLabels.join(' → ')} (quality=${qScore.total.toFixed(1)})`)
 
