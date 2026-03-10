@@ -276,9 +276,9 @@ const CONNECTION_TYPES: Record<string, Record<string, string>> = {
     hard: 'institutions and fields of work',
   },
   videogames: {
-    easy: 'game series',
-    medium: 'game series and developers',
-    hard: 'game series, developers, and publishers',
+    easy: 'game series, characters, and settings',
+    medium: 'game series, developers, and directors',
+    hard: 'game series, developers, publishers, composers, and game engines',
   },
   mb_rock: { easy: 'band memberships and collaborations', medium: 'band memberships and collaborations', hard: 'band memberships and collaborations' },
   mb_hiphop: { easy: 'record labels and collaborations', medium: 'record labels and collaborations', hard: 'record labels and collaborations' },
