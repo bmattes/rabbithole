@@ -190,6 +190,41 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
   ?a wikibase:sitelinks ?links. FILTER(?links > 10)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'runs on'),
+  // Game → featured character (P674, fictional characters only)
+  sq('easy', ['game', 'character'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  ?a wdt:P31 wd:Q7889; wdt:P674 ?b.
+  ?b wdt:P31 wd:Q15773347.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 15)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 10)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?blinks) LIMIT ${limit}`, 'features character'),
+  // Game → narrative setting (P840)
+  sq('easy', ['game', 'location'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  ?a wdt:P31 wd:Q7889; wdt:P840 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 15)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 5)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?blinks) LIMIT ${limit}`, 'set in'),
+  // Game → composer (P86)
+  sq('hard', ['game', 'person'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  ?a wdt:P31 wd:Q7889; wdt:P86 ?b.
+  ?b wdt:P31 wd:Q5.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 15)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 5)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'music composed by'),
+  // Game → director (P57)
+  sq('medium', ['game', 'person'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  ?a wdt:P31 wd:Q7889; wdt:P57 ?b.
+  ?b wdt:P31 wd:Q5.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 15)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 5)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'directed by'),
 ]
 
 // Art: artwork → painter, painter → movement, painter → institution
