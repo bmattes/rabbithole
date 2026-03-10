@@ -83,6 +83,33 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
   ?a wikibase:sitelinks ?links. FILTER(?links > 30)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'produced by'),
+  // Film → genre (medium: connects films across eras via shared genre — "both are westerns")
+  sq('medium', ['film', 'genre'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  VALUES ?type { wd:Q11424 wd:Q506240 }
+  ?a wdt:P31 ?type; wdt:P136 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 30)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 20)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'belongs to genre'),
+  // Film → narrative setting (hard: connects films set in same real-world location)
+  sq('hard', ['film', 'location'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  VALUES ?type { wd:Q11424 wd:Q506240 }
+  ?a wdt:P31 ?type; wdt:P840 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 30)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 30)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'set in'),
+  // Film → award (hard: Oscars, Palme d'Or — connects prestige films)
+  sq('hard', ['film', 'other'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  VALUES ?type { wd:Q11424 wd:Q506240 }
+  VALUES ?b { wd:Q19020 wd:Q41417 wd:Q38400 wd:Q185498 wd:Q102427 wd:Q10856358 wd:Q104183 wd:Q2388766 }
+  ?a wdt:P31 ?type; wdt:P166 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 30)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'won award'),
 ]
 
 // Music subqueries — split by entity type so we can tag them correctly
@@ -131,6 +158,15 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
   ?a wikibase:sitelinks ?links. FILTER(?links > 30)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'signed to'),
+  // Song/album → genre (hard: connects works across genres — jazz, soul, rock)
+  sq('hard', ['song', 'genre'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  VALUES ?songType { wd:Q7366 wd:Q134556 wd:Q208569 }
+  ?a wdt:P31 ?songType; wdt:P136 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 15)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 20)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'belongs to genre'),
 ]
 
 // Video games: game → series, game → developer, game → publisher
@@ -288,6 +324,32 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
   ?a wikibase:sitelinks ?links. FILTER(?links > 5)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'studied at'),
+  // Painter → influenced by (hard: Monet→Turner, Picasso→Cézanne)
+  sq('hard', ['person', 'person'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q1028181; wdt:P737 ?b.
+  ?b wdt:P31 wd:Q5.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 10)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 10)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'influenced by'),
+  // Painter → birthplace country (hard: geographic origin — bridges across movements via nationality)
+  sq('hard', ['person', 'country'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q1028181; wdt:P19 ?b.
+  ?b wdt:P31 wd:Q6256.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 10)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 30)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'born in'),
+  // Painter → alma mater (hard: Beaux-Arts, Royal Academy, Académie Gérôme)
+  sq('hard', ['person', 'other'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q1028181; wdt:P69 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 10)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 20)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'trained at'),
 ]
 
 // Literature: author → movement/genre, novel → author
@@ -315,6 +377,32 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
   ?a wikibase:sitelinks ?links. FILTER(?links > 10)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'part of movement'),
+  // Author → influenced by (hard: intellectual lineage between writers)
+  sq('hard', ['person', 'person'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q36180; wdt:P737 ?b.
+  ?b wdt:P31 wd:Q5.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 20)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 20)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'influenced by'),
+  // Author → alma mater (hard: shared educational institution)
+  sq('hard', ['person', 'other'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q36180; wdt:P69 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 20)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 30)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'educated at'),
+  // Book → genre (hard: genre classification for books — literary fiction, sci-fi, mystery)
+  sq('hard', ['book', 'genre'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  VALUES ?bookType { wd:Q7725634 wd:Q8261 wd:Q1667921 }
+  ?a wdt:P31 ?bookType; wdt:P136 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 15)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 20)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'belongs to genre'),
 ]
 
 // Geography: country → continent, capital city → country (capitals only to avoid timeout)
@@ -360,6 +448,20 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
   ?a wikibase:sitelinks ?links.
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT 60`, 'located in'),
+  // Film → filming location (hard: connects cities via films shot there — Rome, NYC, Paris)
+  // Links geography's city nodes to famous films, creating cross-domain cultural bridges
+  sq('hard', ['city', 'other'], (_limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  VALUES ?a { wd:Q60 wd:Q84 wd:Q90 wd:Q220 wd:Q1353 wd:Q649 wd:Q38022 wd:Q1345
+              wd:Q1055 wd:Q3821 wd:Q72 wd:Q2807 wd:Q16555 wd:Q2013 wd:Q3630 wd:Q35765
+              wd:Q406 wd:Q4120 wd:Q2484 wd:Q79 wd:Q987 wd:Q1354 wd:Q106087 wd:Q4656
+              wd:Q1492 wd:Q2844 wd:Q1519 wd:Q8678 wd:Q189395 }
+  VALUES ?filmType { wd:Q11424 wd:Q506240 }
+  ?b wdt:P31 ?filmType; wdt:P915 ?a.
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 30)
+  ?a wikibase:sitelinks ?links.
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?blinks) LIMIT 100`, 'filming location of'),
 ]
 
 // Royals: monarch → country (via P27 citizenship), monarch → noble house (P53)
@@ -408,6 +510,23 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
   ?a wikibase:sitelinks ?links. FILTER(?links > 5)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'parent/child of'),
+  // Monarch → alma mater (hard: educational institution — surprisingly many royals shared schools)
+  sq('hard', ['person', 'other'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q116; wdt:P69 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 5)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 30)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'educated at'),
+  // Monarch → birthplace country (hard: geographic origin)
+  sq('hard', ['person', 'country'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q116; wdt:P19 ?b.
+  ?b wdt:P31 wd:Q6256.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 5)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 30)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'born in'),
 ]
 
 // Tennis: player → national cup team (Davis/BJK), player → coach
@@ -454,6 +573,32 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
   ?a wikibase:sitelinks ?links. FILTER(?links > 30)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'plays in'),
+  // Player → place of birth (hard: geographic birthplace connection)
+  sq('hard', ['person', 'country'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q937857; wdt:P19 ?b.
+  ?b wdt:P31 wd:Q6256.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 40)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 30)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'born in'),
+  // Player → position played (hard: striker/goalkeeper/midfielder — requires tactical knowledge)
+  sq('hard', ['person', 'other'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q937857; wdt:P413 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 40)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 5)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'plays as'),
+  // Club → head coach/manager (hard: manager knowledge is for dedicated fans)
+  sq('hard', ['team', 'person'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?a wdt:P31 wd:Q476028; wdt:P641 wd:Q2736; wdt:P286 ?b.
+  ?b wdt:P31 wd:Q5.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 30)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 20)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'managed by'),
 ]
 
 // TV: show → cast, show → creator, show → production network
@@ -484,6 +629,23 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
   ?a wikibase:sitelinks ?links. FILTER(?links > 15)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'aired on'),
+  // Show → screenwriter (hard: connects shows via shared writer — e.g. both written by Vince Gilligan)
+  sq('hard', ['series', 'person'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?a wdt:P31 wd:Q5398426; wdt:P58 ?b.
+  ?b wdt:P31 wd:Q5.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 20)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 10)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'written by'),
+  // Show → genre (medium: connects shows of same genre — crime drama, sitcom, sci-fi)
+  sq('medium', ['series', 'genre'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?a wdt:P31 wd:Q5398426; wdt:P136 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 20)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 20)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'belongs to genre'),
 ]
 
 // Philosophy: philosopher → notable work, philosopher → school, philosopher → influenced by
@@ -518,6 +680,14 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
   ?a wikibase:sitelinks ?links. FILTER(?links > 20)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'influenced by'),
+  // Philosopher → alma mater (hard: Oxford, Cambridge, Berlin — institutional connections)
+  sq('hard', ['person', 'other'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q4964182; wdt:P69 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 15)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 30)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'educated at'),
 ]
 
 // Military: commander → country, commander → conflict
@@ -548,6 +718,14 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
   ?a wikibase:sitelinks ?links. FILTER(?links > 5)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'awarded'),
+  // Commander → alma mater (hard: West Point, Sandhurst, St-Cyr — military academy connections)
+  sq('hard', ['person', 'other'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q189290; wdt:P69 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 10)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 20)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'educated at'),
 ]
 
 // Mythology: deities, heroes, creatures, artifacts — multiple relation types for rich graph
@@ -673,6 +851,16 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
   ?a wikibase:sitelinks ?links. FILTER(?links > 5)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'operated by'),
+  // Astronaut → space mission (hard: bridges US and Soviet cosmonauts via ISS/Mir/Apollo-Soyuz)
+  // This creates cross-component connections that otherwise don't exist in the graph
+  sq('hard', ['person', 'other'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q11631; wdt:P450 ?b.
+  ?b wdt:P31 wd:Q634; wdt:P17 ?country.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 5)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 10)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'flew on mission'),
 ]
 
 // Food: dish → country of origin, dish → food category, dish → main ingredient
@@ -717,6 +905,17 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
   ?a wikibase:sitelinks ?links. FILTER(?links > 10)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'made with'),
+  // Dish → chef creator (hard: connects dishes via the famous chefs who created or popularized them)
+  // Q3499072=chef, Q945799=restaurateur
+  sq('hard', ['dish', 'person'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  VALUES ?foodType { wd:Q746549 wd:Q189796 }
+  ?a wdt:P31 ?foodType; wdt:P170 ?b.
+  ?b wdt:P31 wd:Q5.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 5)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 10)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'created by'),
 ]
 
 // Comics: character → publisher, character → team, character → creator, creator → creator
@@ -763,6 +962,25 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
   ?a wikibase:sitelinks ?links. FILTER(?links > 5)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'worked at'),
+  // Creator → influenced by (hard: Jack Kirby→Will Eisner, Alan Moore→Steve Ditko)
+  sq('hard', ['person', 'person'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P737 ?b.
+  ?b wdt:P31 wd:Q5.
+  { ?a wdt:P108 wd:Q173496. } UNION { ?a wdt:P108 wd:Q2924461. } UNION { ?a wdt:P170 wd:Q1114461. }
+  ?a wikibase:sitelinks ?links. FILTER(?links > 10)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 10)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'influenced by'),
+  // Creator → movement (hard: new wave comics, golden age, silver age)
+  sq('hard', ['person', 'movement'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P135 ?b.
+  { ?a wdt:P108 wd:Q173496. } UNION { ?a wdt:P108 wd:Q2924461. } UNION { ?a wdt:P170 wd:Q1114461. }
+  ?a wikibase:sitelinks ?links. FILTER(?links > 5)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 5)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'part of movement'),
 ]
 
 // Basketball: NBA players → teams, teams → NBA league
@@ -793,6 +1011,22 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
   ?a wikibase:sitelinks ?links. FILTER(?links > 5)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'plays in'),
+  // Player → alma mater (hard: college basketball — Duke, Kentucky, UNC — well-known pipeline schools)
+  sq('hard', ['person', 'other'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P641 wd:Q5372; wdt:P69 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 20)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 30)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'played college ball at'),
+  // Player → award (hard: MVP, All-Star, Rookie of the Year — prestigious recognitions)
+  sq('hard', ['person', 'other'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  VALUES ?b { wd:Q843303 wd:Q766290 wd:Q913851 wd:Q2469962 wd:Q2470027 wd:Q1361501 wd:Q2470036 }
+  ?a wdt:P31 wd:Q5; wdt:P641 wd:Q5372; wdt:P166 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 20)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'received award'),
 ]
 
 // American Football: player → team, team → league
@@ -812,6 +1046,23 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
   ?a wikibase:sitelinks ?links. FILTER(?links > 10)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'plays in'),
+  // NFL team → head coach (hard: coaches bridge teams across eras)
+  sq('hard', ['team', 'person'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?a wdt:P31 wd:Q17156793; wdt:P286 ?b.
+  ?b wdt:P31 wd:Q5.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 10)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 10)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'coached by'),
+  // Player → position played (hard: quarterback, wide receiver — tactical knowledge)
+  sq('hard', ['person', 'other'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q19204627; wdt:P413 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 15)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 5)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'plays as'),
 ]
 
 // Each domain query returns pairs of (primary entity, related entity)
@@ -960,6 +1211,22 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
   ?a wikibase:sitelinks ?links. FILTER(?links > 20)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'aligned with'),
+  // Historical figure → alma mater (hard: Oxford/Cambridge/Harvard connections across eras)
+  sq('hard', ['person', 'other'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P69 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 35)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 40)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'educated at'),
+  // Historical figure → award (hard: Nobel Peace Prize, Presidential Medal of Freedom — cross-era recognition)
+  sq('hard', ['person', 'other'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  VALUES ?b { wd:Q35637 wd:Q131226 wd:Q7191 wd:Q170483 wd:Q131539 wd:Q2747062 wd:Q131604 }
+  ?a wdt:P31 wd:Q5; wdt:P166 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 30)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'received award'),
 ]
 
 // Science: scientist → employer/institution (easy), scientist → field of work (medium)
@@ -978,6 +1245,31 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
   ?a wikibase:sitelinks ?links. FILTER(?links > 25)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'worked in'),
+  // Scientist → alma mater (hard: educational institution connection)
+  sq('hard', ['person', 'other'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q901; wdt:P69 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 25)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 30)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'educated at'),
+  // Scientist → influenced by (hard: intellectual lineage — both must be well-known scientists)
+  sq('hard', ['person', 'person'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q901; wdt:P737 ?b.
+  ?b wdt:P31 wd:Q5.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 30)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 30)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'influenced by'),
+  // Scientist → award (hard: Nobel Prize, Fields Medal — prestigious recognition)
+  sq('hard', ['person', 'other'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  VALUES ?b { wd:Q7191 wd:Q38104 wd:Q25363 wd:Q44585 wd:Q11631 wd:Q35637 wd:Q131539 wd:Q28008836 wd:Q35637 wd:Q781026 }
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q901; wdt:P166 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 20)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'received award'),
 ]
 
 // For single-query domains, type hint applied to all rows (science/history now use subqueries)

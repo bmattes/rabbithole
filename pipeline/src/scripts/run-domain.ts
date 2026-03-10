@@ -90,11 +90,20 @@ const ANCHOR_TYPES: Record<string, string[]> = {
   basketball: ['person', 'team'],
   americanfootball: ['person', 'team'],
   videogames: ['game'],
+  literature: ['book'],
+  art: ['artwork'],
+  geography: ['city'],
+  soccer: ['team'],
+  tv: ['series'],
 }
 
 // Mirror of index.ts INTERMEDIATE_BRIDGE_TYPES
 const INTERMEDIATE_BRIDGE_TYPES: Record<string, Set<string>> = {
   videogames: new Set(['person', 'location', 'genre', 'platform']),
+  movies: new Set(['person', 'genre', 'location', 'other']),
+  tv: new Set(['person', 'genre', 'network']),
+  literature: new Set(['person', 'movement', 'field', 'genre']),
+  art: new Set(['person', 'movement', 'country']),
 }
 
 const UNGUESSABLE_TYPES = new Set(['office', 'field', 'category'])

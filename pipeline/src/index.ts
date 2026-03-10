@@ -31,13 +31,23 @@ const ANCHOR_TYPES: Record<string, string[]> = {
   basketball: ['person', 'team'],
   americanfootball: ['person', 'team'],
   videogames: ['game'],
+  literature: ['book'],
+  art: ['artwork'],
+  geography: ['city'],
+  soccer: ['team'],
+  tv: ['series'],
 }
 
 // Domains where the anchor type can also appear as an intermediate node,
 // bridged via an "interesting" non-anchor type (person, location, genre, platform).
 // e.g. game → character → game → genre → game
+// e.g. film → genre → film → location → film
 const INTERMEDIATE_BRIDGE_TYPES: Record<string, Set<string>> = {
   videogames: new Set(['person', 'location', 'genre', 'platform']),
+  movies: new Set(['person', 'genre', 'location', 'other']),  // film→actor→film, film→genre→film, film→award→film
+  tv: new Set(['person', 'genre', 'network']),                 // series→cast→series, series→genre→series
+  literature: new Set(['person', 'movement', 'field', 'genre']), // book→author→book, book→genre→book
+  art: new Set(['person', 'movement', 'country']),             // artwork→painter→artwork, artist→movement→artist
 }
 
 // Entity types that make unguessable bridge nodes — abstract offices, government
