@@ -205,7 +205,7 @@ async function evaluatePuzzle(
     philosophy: 'IMPORTANT: For the philosophy category, universities and academic institutions (where philosophers were educated, e.g. "University of Oxford") are VALID bridge nodes alongside philosophical movements.',
     military: 'IMPORTANT: For the military history category, military academies (e.g. "West Point", "Royal Military Academy Sandhurst") are VALID bridge nodes as educational institutions for military figures.',
     royals: 'IMPORTANT: For the royals category, schools and universities (e.g. "Eton College", "Oxford") and countries of birth are VALID bridge nodes for royal figures.',
-    space: 'IMPORTANT: For the space category, individual space missions (e.g. "Apollo 11", "ISS Expedition 1") are VALID bridge nodes that connect astronauts from different countries — do NOT flag missions as wrong_domain.',
+    space: 'IMPORTANT: For the space category, individual space missions (e.g. "Apollo 11", "ISS Expedition 1"), spacecraft and launch vehicles (e.g. "Saturn V", "Space Shuttle Discovery", "Soyuz"), and space agencies (NASA, ESA, Roscosmos) are all VALID bridge nodes — do NOT flag any of these as wrong_domain.',
     food: 'IMPORTANT: For the food category, famous chefs who created dishes are VALID bridge nodes — do NOT flag chef names as wrong_domain.',
   }
   const domainNote = domainNotes[domain] ?? ''
@@ -317,7 +317,7 @@ const CONNECTION_TYPES: Record<string, Record<string, string>> = {
   mythology: { easy: 'mythology systems', medium: 'mythology systems and pantheons', hard: 'pantheons, family, and legend' },
   philosophy: { easy: 'schools of thought', medium: 'schools of thought', hard: 'schools of thought, philosophical influences, and academic institutions' },
   military: { easy: 'nationality and country', medium: 'nationality and conflicts', hard: 'conflicts, military awards, and military academies' },
-  space: { easy: 'space agencies', medium: 'space agencies and nationality', hard: 'space agencies, nationality, and shared space missions' },
+  space: { easy: 'space agencies, spacecraft, and space missions', medium: 'space agencies, spacecraft, missions, and nationality', hard: 'space agencies, spacecraft, missions, nationality, and universities' },
   literature: { easy: 'novels, authors, and literary movements', medium: 'authors and literary movements', hard: 'authors, literary movements, influences, alma maters, and genres' },
   art: { easy: 'artworks and painters', medium: 'painters and art movements', hard: 'painters, movements, institutions, artistic influences, and birthplace countries' },
   food: { easy: 'country of origin', medium: 'origin and food categories', hard: 'origin, food categories, ingredients, and chef creators' },

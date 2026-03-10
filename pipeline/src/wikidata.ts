@@ -822,6 +822,16 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
   ?a wikibase:sitelinks ?links. FILTER(?links > 3)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'represents'),
+  // Spacecraft → crew (medium: broader vehicle types including orbiters and capsules)
+  sq('medium', ['other', 'person'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  VALUES ?vehicleType { wd:Q40218 wd:Q752783 wd:Q3863 wd:Q12796 wd:Q2876821 }
+  ?a wdt:P31 ?vehicleType; wdt:P1029 ?b.
+  ?b wdt:P31 wd:Q5.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 5)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 3)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'crew of'),
   // Space program → participating country (medium: Apollo→US, ISS→Russia/US/Japan)
   sq('medium', ['other', 'country'], (limit) => `
 SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
@@ -851,9 +861,20 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
   ?a wikibase:sitelinks ?links. FILTER(?links > 5)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'operated by'),
-  // Astronaut → space mission (hard: bridges US and Soviet cosmonauts via ISS/Mir/Apollo-Soyuz)
-  // This creates cross-component connections that otherwise don't exist in the graph
-  sq('hard', ['person', 'other'], (limit) => `
+  // Spacecraft/vehicle → crew member (easy: Saturn V, Space Shuttle Discovery, Soyuz — iconic vessels)
+  // P1029=crew member; Q40218=rocket, Q752783=spacecraft, Q3863=Space Shuttle
+  sq('easy', ['other', 'person'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  VALUES ?vehicleType { wd:Q40218 wd:Q752783 wd:Q3863 wd:Q12796 }
+  ?a wdt:P31 ?vehicleType; wdt:P1029 ?b.
+  ?b wdt:P31 wd:Q5.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 10)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 5)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'crew of'),
+  // Astronaut → space mission (easy: famous missions like Apollo 11, ISS, Mir — well-known to general players)
+  // Also bridges US/Soviet components via shared missions (ISS, Apollo-Soyuz)
+  sq('easy', ['person', 'other'], (limit) => `
 SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
   ?a wdt:P31 wd:Q5; wdt:P106 wd:Q11631; wdt:P450 ?b.
   ?b wdt:P31 wd:Q634; wdt:P17 ?country.
