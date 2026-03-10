@@ -36,6 +36,18 @@ const ANCHOR_TYPES: Record<string, string[]> = {
   geography: ['city'],
   soccer: ['team'],
   tv: ['series'],
+  // genre-specific music domains (Wikidata-backed, replaces mb_*)
+  rock: ['person'],
+  hiphop: ['person'],
+  pop: ['person'],
+  rnb: ['person'],
+  country: ['person'],
+  // mb_* aliases kept for backwards compat (entityCache maps them to the above)
+  mb_rock: ['person'],
+  mb_hiphop: ['person'],
+  mb_pop: ['person'],
+  mb_rnb: ['person'],
+  mb_country: ['person'],
 }
 
 // Domains where the anchor type can also appear as an intermediate node,

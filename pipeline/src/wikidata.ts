@@ -13,8 +13,19 @@ export type WikidataDomain =
   | 'tennis' | 'soccer' | 'tv' | 'philosophy' | 'military'
   | 'mythology' | 'space' | 'food' | 'comics'
   | 'basketball' | 'americanfootball'
+  | 'rock' | 'hiphop' | 'pop' | 'rnb' | 'country'
 
+// mb_* are kept as CategoryDomain aliases that map to the Wikidata rock/hiphop/etc domains
 export type CategoryDomain = WikidataDomain | 'mb_rock' | 'mb_hiphop' | 'mb_pop' | 'mb_rnb' | 'mb_country'
+
+// Maps legacy mb_* domain names (stored in Supabase) to the new Wikidata domain names
+export const MB_TO_WIKIDATA: Record<string, WikidataDomain> = {
+  mb_rock:    'rock',
+  mb_hiphop:  'hiphop',
+  mb_pop:     'pop',
+  mb_rnb:     'rnb',
+  mb_country: 'country',
+}
 
 // Sport uses multiple focused queries to avoid Wikidata timeouts
 const SPORT_SUBQUERIES: TaggedSubquery[] = [
@@ -165,6 +176,239 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
   ?a wdt:P31 ?songType; wdt:P136 ?b.
   ?a wikibase:sitelinks ?links. FILTER(?links > 15)
   ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 20)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'belongs to genre'),
+]
+
+// ---- Genre-specific music subqueries ----
+// Each genre uses P136 (genre) to filter artists/songs to the relevant genre cluster.
+// Wikidata genre QIDs:
+//   Rock:    Q11399   Hip-hop: Q11401   Pop: Q37073
+//   R&B:     Q131272  Soul:    Q213714  Country: Q83440
+//
+// Pattern: same structure as MUSIC_SUBQUERIES but with a genre filter on ?a or ?b.
+
+// Rock music (Q11399): artist→label, artist→influences, song→performer, genre bridges
+const ROCK_SUBQUERIES: TaggedSubquery[] = [
+  // Rock artist → record label (easy)
+  sq('easy', ['person', 'label'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  VALUES ?genre { wd:Q11399 wd:Q5647 wd:Q38848 wd:Q484641 wd:Q45981 }
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q639669; wdt:P264 ?b; wdt:P136 ?genre.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 20)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'signed to'),
+  // Rock song → performer (easy: iconic rock songs → band/artist)
+  sq('easy', ['song', 'person'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  VALUES ?genre { wd:Q11399 wd:Q5647 wd:Q38848 wd:Q484641 wd:Q45981 }
+  VALUES ?songType { wd:Q7366 wd:Q134556 wd:Q208569 }
+  ?a wdt:P31 ?songType; wdt:P175 ?b; wdt:P136 ?genre.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 15)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'performed by'),
+  // Rock artist → record label (medium)
+  sq('medium', ['person', 'label'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  VALUES ?genre { wd:Q11399 wd:Q5647 wd:Q38848 wd:Q484641 wd:Q45981 }
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q639669; wdt:P264 ?b; wdt:P136 ?genre.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 30)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 25)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'signed to'),
+  // Rock artist → influenced by (hard)
+  sq('hard', ['person', 'person'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  VALUES ?genre { wd:Q11399 wd:Q5647 wd:Q38848 wd:Q484641 wd:Q45981 }
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q639669; wdt:P737 ?b; wdt:P136 ?genre.
+  ?b wdt:P31 wd:Q5; wdt:P106 wd:Q639669.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 40)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'influenced by'),
+  // Rock song → genre (hard: connects songs across subgenres)
+  sq('hard', ['song', 'genre'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  VALUES ?topGenre { wd:Q11399 wd:Q5647 wd:Q38848 wd:Q484641 wd:Q45981 }
+  VALUES ?songType { wd:Q7366 wd:Q134556 wd:Q208569 }
+  ?a wdt:P31 ?songType; wdt:P136 ?b; wdt:P136 ?topGenre.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 15)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 20)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'belongs to genre'),
+]
+
+// Hip-hop (Q11401): artist→label, song→performer, artist→influences
+const HIPHOP_SUBQUERIES: TaggedSubquery[] = [
+  sq('easy', ['person', 'label'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  VALUES ?genre { wd:Q11401 wd:Q131272 wd:Q484641 }
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q639669; wdt:P264 ?b; wdt:P136 ?genre.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 20)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'signed to'),
+  sq('easy', ['song', 'person'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  VALUES ?genre { wd:Q11401 wd:Q131272 }
+  VALUES ?songType { wd:Q7366 wd:Q134556 wd:Q208569 }
+  ?a wdt:P31 ?songType; wdt:P175 ?b; wdt:P136 ?genre.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 15)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'performed by'),
+  sq('medium', ['person', 'label'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  VALUES ?genre { wd:Q11401 wd:Q131272 wd:Q484641 }
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q639669; wdt:P264 ?b; wdt:P136 ?genre.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 30)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 20)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'signed to'),
+  sq('hard', ['person', 'person'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  VALUES ?genre { wd:Q11401 wd:Q131272 }
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q639669; wdt:P737 ?b; wdt:P136 ?genre.
+  ?b wdt:P31 wd:Q5; wdt:P106 wd:Q639669.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 40)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'influenced by'),
+  sq('hard', ['song', 'genre'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  VALUES ?topGenre { wd:Q11401 wd:Q131272 }
+  VALUES ?songType { wd:Q7366 wd:Q134556 wd:Q208569 }
+  ?a wdt:P31 ?songType; wdt:P136 ?b; wdt:P136 ?topGenre.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 15)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 20)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'belongs to genre'),
+]
+
+// Pop music (Q37073)
+const POP_SUBQUERIES: TaggedSubquery[] = [
+  sq('easy', ['person', 'label'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  VALUES ?genre { wd:Q37073 wd:Q484641 wd:Q2964303 }
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q639669; wdt:P264 ?b; wdt:P136 ?genre.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 20)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'signed to'),
+  sq('easy', ['song', 'person'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  VALUES ?genre { wd:Q37073 wd:Q484641 wd:Q2964303 }
+  VALUES ?songType { wd:Q7366 wd:Q134556 wd:Q208569 }
+  ?a wdt:P31 ?songType; wdt:P175 ?b; wdt:P136 ?genre.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 15)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'performed by'),
+  sq('medium', ['person', 'label'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  VALUES ?genre { wd:Q37073 wd:Q484641 wd:Q2964303 }
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q639669; wdt:P264 ?b; wdt:P136 ?genre.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 30)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 25)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'signed to'),
+  sq('hard', ['person', 'person'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  VALUES ?genre { wd:Q37073 wd:Q484641 }
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q639669; wdt:P737 ?b; wdt:P136 ?genre.
+  ?b wdt:P31 wd:Q5; wdt:P106 wd:Q639669.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 40)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'influenced by'),
+  sq('hard', ['song', 'genre'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  VALUES ?topGenre { wd:Q37073 wd:Q484641 }
+  VALUES ?songType { wd:Q7366 wd:Q134556 wd:Q208569 }
+  ?a wdt:P31 ?songType; wdt:P136 ?b; wdt:P136 ?topGenre.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 15)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 20)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'belongs to genre'),
+]
+
+// R&B / Soul (Q131272 R&B, Q213714 soul)
+const RNB_SUBQUERIES: TaggedSubquery[] = [
+  sq('easy', ['person', 'label'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  VALUES ?genre { wd:Q131272 wd:Q213714 wd:Q206159 wd:Q484641 }
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q639669; wdt:P264 ?b; wdt:P136 ?genre.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 20)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'signed to'),
+  sq('easy', ['song', 'person'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  VALUES ?genre { wd:Q131272 wd:Q213714 wd:Q206159 }
+  VALUES ?songType { wd:Q7366 wd:Q134556 wd:Q208569 }
+  ?a wdt:P31 ?songType; wdt:P175 ?b; wdt:P136 ?genre.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 15)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'performed by'),
+  sq('medium', ['person', 'label'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  VALUES ?genre { wd:Q131272 wd:Q213714 wd:Q206159 wd:Q484641 }
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q639669; wdt:P264 ?b; wdt:P136 ?genre.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 30)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 20)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'signed to'),
+  sq('hard', ['person', 'person'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  VALUES ?genre { wd:Q131272 wd:Q213714 wd:Q206159 }
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q639669; wdt:P737 ?b; wdt:P136 ?genre.
+  ?b wdt:P31 wd:Q5; wdt:P106 wd:Q639669.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 40)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'influenced by'),
+  sq('hard', ['song', 'genre'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  VALUES ?topGenre { wd:Q131272 wd:Q213714 }
+  VALUES ?songType { wd:Q7366 wd:Q134556 wd:Q208569 }
+  ?a wdt:P31 ?songType; wdt:P136 ?b; wdt:P136 ?topGenre.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 15)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 20)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'belongs to genre'),
+]
+
+// Country music (Q83440)
+const COUNTRY_SUBQUERIES: TaggedSubquery[] = [
+  sq('easy', ['person', 'label'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  VALUES ?genre { wd:Q83440 wd:Q1190434 wd:Q1287394 }
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q639669; wdt:P264 ?b; wdt:P136 ?genre.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 15)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'signed to'),
+  sq('easy', ['song', 'person'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  VALUES ?genre { wd:Q83440 wd:Q1190434 wd:Q1287394 }
+  VALUES ?songType { wd:Q7366 wd:Q134556 wd:Q208569 }
+  ?a wdt:P31 ?songType; wdt:P175 ?b; wdt:P136 ?genre.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 10)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'performed by'),
+  sq('medium', ['person', 'label'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  VALUES ?genre { wd:Q83440 wd:Q1190434 wd:Q1287394 }
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q639669; wdt:P264 ?b; wdt:P136 ?genre.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 20)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 15)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'signed to'),
+  sq('hard', ['person', 'person'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  VALUES ?genre { wd:Q83440 wd:Q1190434 wd:Q1287394 }
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q639669; wdt:P737 ?b; wdt:P136 ?genre.
+  ?b wdt:P31 wd:Q5; wdt:P106 wd:Q639669.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 30)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'influenced by'),
+  sq('hard', ['song', 'genre'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  VALUES ?topGenre { wd:Q83440 wd:Q1190434 }
+  VALUES ?songType { wd:Q7366 wd:Q134556 wd:Q208569 }
+  ?a wdt:P31 ?songType; wdt:P136 ?b; wdt:P136 ?topGenre.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 10)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 15)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'belongs to genre'),
 ]
@@ -771,12 +1015,25 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'family of'),
   // Figure → pantheon/group (easy: Twelve Olympians, Aesir, Vanir — bridges across family clusters)
   sq('easy', ['deity', 'group'], (limit) => `
-SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
   VALUES ?type { wd:Q22989102 wd:Q4271324 wd:Q178885 wd:Q12195757 wd:Q4936492 }
   ?a wdt:P31 ?type; wdt:P361 ?b.
   ?a wikibase:sitelinks ?links. FILTER(?links > 3)
+  ?b wikibase:sitelinks ?blinks.
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'member of'),
+  // Figure → significant location (easy: Olympus, Delphi, Valhalla — bridges cross-family via sacred places)
+  // Q271669=fictional location; broader: any location associated with the figure
+  sq('easy', ['deity', 'location'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  VALUES ?type { wd:Q22989102 wd:Q4271324 wd:Q178885 wd:Q12195757 wd:Q4936492 }
+  VALUES ?locType { wd:Q271669 wd:Q23413 wd:Q618123 wd:Q17334923 }
+  ?a wdt:P31 ?type; wdt:P276|wdt:P19|wdt:P937 ?b.
+  ?b wdt:P31 ?locType.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 5)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 5)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'associated with'),
   // Figure → pantheon/group (medium: Twelve Olympians, Aesir, Vanir, etc.)
   // Also include mythology system at medium — without it the medium graph is too sparse
   // (groups have only 7-14 members, not enough to form 4-hop paths)
@@ -1138,6 +1395,11 @@ const DOMAIN_QUERIES: Record<WikidataDomain, (limit: number) => string> = {
 
   science: (_limit) => '',
   history: (_limit) => '',
+  rock: (_limit) => '',
+  hiphop: (_limit) => '',
+  pop: (_limit) => '',
+  rnb: (_limit) => '',
+  country: (_limit) => '',
 }
 
 function extractId(uri: string): string {
@@ -1348,6 +1610,11 @@ const SUBQUERY_MAP: Partial<Record<WikidataDomain, TaggedSubquery[]>> = {
   americanfootball: AMERICANFOOTBALL_SUBQUERIES,
   history:          HISTORY_SUBQUERIES,
   science:          SCIENCE_SUBQUERIES,
+  rock:             ROCK_SUBQUERIES,
+  hiphop:           HIPHOP_SUBQUERIES,
+  pop:              POP_SUBQUERIES,
+  rnb:              RNB_SUBQUERIES,
+  country:          COUNTRY_SUBQUERIES,
 }
 
 export async function fetchEntities(

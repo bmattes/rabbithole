@@ -29,6 +29,11 @@ export interface DomainOverrides {
    * When set, this value is used for ALL difficulties instead of the defaults (40/20/0).
    */
   minAnchorFamiliarity?: number
+  /**
+   * Cap the entity limit for this domain. When set, the pipeline will not retry with
+   * a higher limit than this (avoids Wikidata timeouts on domains with small graphs).
+   */
+  maxEntityLimit?: number
 }
 
 const CONFIG_DIR = path.join(__dirname, '../../.entity-cache/domain-config')

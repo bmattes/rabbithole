@@ -95,6 +95,16 @@ const ANCHOR_TYPES: Record<string, string[]> = {
   geography: ['city'],
   soccer: ['team'],
   tv: ['series'],
+  rock: ['person'],
+  hiphop: ['person'],
+  pop: ['person'],
+  rnb: ['person'],
+  country: ['person'],
+  mb_rock: ['person'],
+  mb_hiphop: ['person'],
+  mb_pop: ['person'],
+  mb_rnb: ['person'],
+  mb_country: ['person'],
 }
 
 // Mirror of index.ts INTERMEDIATE_BRIDGE_TYPES
@@ -292,10 +302,13 @@ async function run() {
   const difficulties: Difficulty[] = ['easy', 'medium', 'hard']
   const results: DomainResult[] = []
 
+  const domainOverrides = readDomainOverrides(domain)
+  const maxLimit = domainOverrides.maxEntityLimit ?? 3000
+
   for (const difficulty of difficulties) {
-    // Try with 1500 entities first, then 3000 on failure
+    // Try with 1500 entities first, then up to maxLimit on failure
     let result = await runDifficulty(difficulty, 1500)
-    if (!result) result = await runDifficulty(difficulty, 3000)
+    if (!result && maxLimit > 1500) result = await runDifficulty(difficulty, maxLimit)
     if (result) results.push(result)
   }
 
