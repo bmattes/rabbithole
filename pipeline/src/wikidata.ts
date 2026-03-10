@@ -1022,14 +1022,12 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
   ?b wikibase:sitelinks ?blinks.
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'member of'),
-  // Figure → significant location (easy: Olympus, Delphi, Valhalla — bridges cross-family via sacred places)
-  // Q271669=fictional location; broader: any location associated with the figure
+  // Figure → associated fictional location (easy: Olympus, Underworld, Valhalla — bridges cross-family)
   sq('easy', ['deity', 'location'], (limit) => `
 SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
   VALUES ?type { wd:Q22989102 wd:Q4271324 wd:Q178885 wd:Q12195757 wd:Q4936492 }
-  VALUES ?locType { wd:Q271669 wd:Q23413 wd:Q618123 wd:Q17334923 }
-  ?a wdt:P31 ?type; wdt:P276|wdt:P19|wdt:P937 ?b.
-  ?b wdt:P31 ?locType.
+  ?a wdt:P31 ?type; wdt:P276 ?b.
+  ?b wdt:P31 wd:Q271669.
   ?a wikibase:sitelinks ?links. FILTER(?links > 5)
   ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 5)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
