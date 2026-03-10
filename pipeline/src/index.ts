@@ -45,7 +45,7 @@ const ANCHOR_TYPES: Record<string, string[]> = {
 const INTERMEDIATE_BRIDGE_TYPES: Record<string, Set<string>> = {
   videogames: new Set(['person', 'location', 'genre', 'platform']),
   movies: new Set(['person', 'genre', 'location', 'other']),  // film→actor→film, film→genre→film, film→award→film
-  tv: new Set(['person', 'genre', 'network']),                 // series→cast→series, series→genre→series
+  tv: new Set(['person', 'genre', 'network', 'character']),    // series→cast→series, series→genre→series, series→character→series
   literature: new Set(['person', 'movement', 'field', 'genre']), // book→author→book, book→genre→book
   art: new Set(['person', 'movement', 'country']),             // artwork→painter→artwork, artist→movement→artist
 }

@@ -191,7 +191,7 @@ async function evaluatePuzzle(
   const domainNotes: Record<string, string> = {
     videogames: 'IMPORTANT: For the videogames category, real-world locations (cities, countries) are VALID bridge nodes when games are narratively set there (e.g. "Fallout is set in Washington D.C." or "God of War is set in Greece"). Game genres (e.g. "first-person shooter", "role-playing video game") and gaming platforms (e.g. "PlayStation 3", "Nintendo 64") are also VALID bridge nodes — do NOT flag these as wrong_domain or abstract.',
     movies: 'IMPORTANT: For the movies category, real-world locations (cities, countries) are VALID bridge nodes when used as filming locations or narrative settings. Film genres (e.g. "western", "horror") and film awards (e.g. "Academy Award for Best Picture") are also VALID bridge nodes — do NOT flag these as wrong_domain or abstract.',
-    tv: 'IMPORTANT: For the TV shows category, TV networks (e.g. "HBO", "AMC", "Netflix") and genres (e.g. "drama", "sitcom") are VALID bridge nodes connecting shows — do NOT flag these as wrong_domain or abstract.',
+    tv: 'IMPORTANT: For the TV shows category, TV networks (e.g. "HBO", "AMC", "Netflix"), genres (e.g. "drama", "sitcom"), and fictional characters (e.g. "Walter White", "Tony Soprano") are all VALID bridge nodes connecting shows — do NOT flag these as wrong_domain or abstract. Fictional characters are different from actors — both are valid.',
     geography: 'IMPORTANT: For the geography category, films are VALID bridge nodes when they were filmed in one of the cities (e.g. "Midnight in Paris" filmed in Paris). The connection is the filming location, which is a geographic fact.',
     soccer: 'IMPORTANT: For the soccer category, countries (birthplace of players) and playing positions (e.g. "goalkeeper", "striker") are VALID bridge nodes — do NOT flag these as wrong_domain.',
     basketball: 'IMPORTANT: For the basketball category, universities/colleges (where players went to school) and basketball awards (e.g. "NBA MVP") are VALID bridge nodes — do NOT flag these as wrong_domain.',
@@ -207,6 +207,7 @@ async function evaluatePuzzle(
     royals: 'IMPORTANT: For the royals category, schools and universities (e.g. "Eton College", "Oxford") and countries of birth are VALID bridge nodes for royal figures.',
     space: 'IMPORTANT: For the space category, individual space missions (e.g. "Apollo 11", "ISS Expedition 1"), spacecraft and launch vehicles (e.g. "Saturn V", "Space Shuttle Discovery", "Soyuz"), and space agencies (NASA, ESA, Roscosmos) are all VALID bridge nodes — do NOT flag any of these as wrong_domain.',
     food: 'IMPORTANT: For the food category, famous chefs who created dishes are VALID bridge nodes — do NOT flag chef names as wrong_domain.',
+    mythology: 'IMPORTANT: For the mythology category, pantheon groups (e.g. "Twelve Olympians", "Aesir", "Vanir", "Titans") and mythology systems (e.g. "Greek mythology", "Norse mythology") are VALID bridge nodes — do NOT flag these as wrong_domain or abstract. Family relationships (parent, child, consort) between mythological figures are also expected connections.',
   }
   const domainNote = domainNotes[domain] ?? ''
 
@@ -314,7 +315,7 @@ const CONNECTION_TYPES: Record<string, Record<string, string>> = {
   americanfootball: { easy: 'NFL teams', medium: 'NFL teams and leagues', hard: 'NFL teams, leagues, head coaches, and playing positions' },
   geography: { easy: 'capital cities, countries, and continents', medium: 'countries and continents', hard: 'countries, continents, and famous filming locations' },
   royals: { easy: 'countries and monarchs', medium: 'monarchs and dynasties', hard: 'monarchs, dynasties, educational institutions, and birthplace countries' },
-  mythology: { easy: 'mythology systems', medium: 'mythology systems and pantheons', hard: 'pantheons, family, and legend' },
+  mythology: { easy: 'mythology systems, pantheon groups (e.g. Twelve Olympians, Aesir), and family relationships', medium: 'mythology systems, pantheons, and family', hard: 'pantheons, family, and legend' },
   philosophy: { easy: 'schools of thought', medium: 'schools of thought', hard: 'schools of thought, philosophical influences, and academic institutions' },
   military: { easy: 'nationality and country', medium: 'nationality and conflicts', hard: 'conflicts, military awards, and military academies' },
   space: { easy: 'space agencies, spacecraft, and space missions', medium: 'space agencies, spacecraft, missions, and nationality', hard: 'space agencies, spacecraft, missions, nationality, and universities' },
@@ -322,7 +323,7 @@ const CONNECTION_TYPES: Record<string, Record<string, string>> = {
   art: { easy: 'artworks and painters', medium: 'painters and art movements', hard: 'painters, movements, institutions, artistic influences, and birthplace countries' },
   food: { easy: 'country of origin', medium: 'origin and food categories', hard: 'origin, food categories, ingredients, and chef creators' },
   comics: { easy: 'publisher', medium: 'publisher and teams', hard: 'publisher, teams, creators, artistic influences, and movements' },
-  tv: { easy: 'shared cast', medium: 'cast, creators, and genres', hard: 'cast, creators, genres, networks, and screenwriters' },
+  tv: { easy: 'shared cast members, fictional characters, and genres', medium: 'cast, creators, genres, and fictional characters', hard: 'cast, creators, genres, networks, screenwriters, and fictional characters' },
   music: { easy: 'performers and record labels', medium: 'record labels', hard: 'record labels, influences, and musical genres' },
 }
 

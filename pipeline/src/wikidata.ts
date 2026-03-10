@@ -604,15 +604,34 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
 // TV: show → cast, show → creator, show → production network
 const TV_SUBQUERIES: TaggedSubquery[] = [
   // Show → cast member (easy: actors are widely known)
-  sq('easy', ['show', 'person'], (limit) => `
+  sq('easy', ['series', 'person'], (limit) => `
 SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
   ?a wdt:P31 wd:Q5398426; wdt:P161 ?b.
   ?b wdt:P31 wd:Q5.
   ?a wikibase:sitelinks ?links. FILTER(?links > 15)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'cast member of'),
+  // Show → fictional character (easy: Walter White, Tony Soprano — characters are more recognisable than actors)
+  // Q15773347=fictional human; Q1631275=fictional character (broader)
+  sq('easy', ['series', 'character'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  VALUES ?charType { wd:Q15773347 wd:Q95074 }
+  ?a wdt:P31 wd:Q5398426; wdt:P674 ?b.
+  ?b wdt:P31 ?charType.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 20)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 10)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'features character'),
+  // Show → genre (easy: sitcom/drama/thriller are well-known — enables series→genre→series paths)
+  sq('easy', ['series', 'genre'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?a wdt:P31 wd:Q5398426; wdt:P136 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 20)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 20)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'belongs to genre'),
   // Show → creator/director (medium: showrunners less famous)
-  sq('medium', ['show', 'person'], (limit) => `
+  sq('medium', ['series', 'person'], (limit) => `
 SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
   ?a wdt:P31 wd:Q5398426; wdt:P57|wdt:P162 ?b.
   ?b wdt:P31 wd:Q5.
@@ -621,7 +640,7 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'directed by'),
   // Show → TV network/streaming platform (hard: HBO/AMC/Netflix/FX — well-known even if directors aren't)
   // Q2001305=television network, Q15416=television channel, Q18127=broadcasting company
-  sq('hard', ['show', 'network'], (limit) => `
+  sq('hard', ['series', 'network'], (limit) => `
 SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
   VALUES ?networkType { wd:Q2001305 wd:Q15416 wd:Q18127 wd:Q18610010 }
   ?a wdt:P31 wd:Q5398426; wdt:P449 ?b.
@@ -740,7 +759,7 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
   ?a wikibase:sitelinks ?links. FILTER(?links > 3)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'from mythology'),
-  // Figure → parent/child (easy: Zeus/Athena, Odin/Thor — widely known family links)
+  // Figure → parent/child/consort (easy: Zeus/Athena, Odin/Thor, Hera/Zeus — widely known family links)
   sq('easy', ['deity', 'deity'], (limit) => `
 SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
   VALUES ?type { wd:Q22989102 wd:Q4271324 wd:Q178885 wd:Q12195757 wd:Q4936492 }
@@ -750,6 +769,14 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
   ?a wikibase:sitelinks ?links. FILTER(?links > 3)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'family of'),
+  // Figure → pantheon/group (easy: Twelve Olympians, Aesir, Vanir — bridges across family clusters)
+  sq('easy', ['deity', 'group'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  VALUES ?type { wd:Q22989102 wd:Q4271324 wd:Q178885 wd:Q12195757 wd:Q4936492 }
+  ?a wdt:P31 ?type; wdt:P361 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 3)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'member of'),
   // Figure → pantheon/group (medium: Twelve Olympians, Aesir, Vanir, etc.)
   // Also include mythology system at medium — without it the medium graph is too sparse
   // (groups have only 7-14 members, not enough to form 4-hop paths)

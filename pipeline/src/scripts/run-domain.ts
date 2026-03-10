@@ -101,7 +101,7 @@ const ANCHOR_TYPES: Record<string, string[]> = {
 const INTERMEDIATE_BRIDGE_TYPES: Record<string, Set<string>> = {
   videogames: new Set(['person', 'location', 'genre', 'platform']),
   movies: new Set(['person', 'genre', 'location', 'other']),
-  tv: new Set(['person', 'genre', 'network']),
+  tv: new Set(['person', 'genre', 'network', 'character']),
   literature: new Set(['person', 'movement', 'field', 'genre']),
   art: new Set(['person', 'movement', 'country']),
 }
