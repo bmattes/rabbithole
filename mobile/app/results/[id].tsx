@@ -1,9 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { View, Text, ScrollView, StyleSheet, Pressable, Share, Animated } from 'react-native'
+import { View, Text, ScrollView, StyleSheet, Pressable, Share, Animated, Modal } from 'react-native'
 import { useLocalSearchParams, router } from 'expo-router'
 import { colors } from '../../lib/theme'
 import { awardXP, getPathStats, localDateString } from '../../lib/api'
 import { useAuth } from '../../hooks/useAuth'
+import {
+  levelFromXP, titleForLevel, xpProgressInCurrentLevel, xpForLevel, UNLOCK_MILESTONES,
+} from '../../lib/progression'
+import type { NodeScore } from '../../lib/scoring'
 
 function BoldTermsText({ text, terms, style }: { text: string; terms: string[]; style: object }) {
   const escaped = terms.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
@@ -60,7 +64,7 @@ const pathStyles = StyleSheet.create({
 })
 
 export default function ResultsScreen() {
-  const { id: puzzleId, score, timeMs, hops, optimalHops, playerPath, optimalPath, narrative, difficulty, categoryName, puzzleDate, skipXP } =
+  const { id: puzzleId, score, timeMs, hops, optimalHops, playerPath, optimalPath, narrative, difficulty, categoryName, puzzleDate, skipXP, liveScore, nodeScores } =
     useLocalSearchParams<{
       id: string
       score: string
@@ -74,15 +78,31 @@ export default function ResultsScreen() {
       categoryName?: string
       puzzleDate?: string
       skipXP?: string
+      liveScore: string
+      nodeScores: string
     }>()
 
   const { userId } = useAuth()
   const xpAwarded = useRef(false)
   const [earnedXP, setEarnedXP] = useState(0)
+  const [streak, setStreak] = useState(0)
   const [pathStats, setPathStats] = useState<{ totalPlayers: number; optimalPathPct: number; sameHopsPct: number } | null>(null)
   const [displayScore, setDisplayScore] = useState(0)
   const playerStepOpacities = useRef<Animated.Value[]>([]).current
   const optimalStepOpacities = useRef<Animated.Value[]>([]).current
+
+  // Level-up state
+  const [levelUpData, setLevelUpData] = useState<{
+    newLevel: number
+    newTitle: string
+    prevTitle: string
+    unlocks: typeof UNLOCK_MILESTONES
+    xpBarAnim: Animated.Value
+    xpBarOverflow: Animated.Value
+  } | null>(null)
+  const [showLevelUpModal, setShowLevelUpModal] = useState(false)
+  const xpBarAnim = useRef(new Animated.Value(0)).current
+  const xpBarWidth = useRef(0)
 
   const totalMs = parseInt(timeMs ?? '0')
   const minutes = Math.floor(totalMs / 60000)
@@ -90,6 +110,9 @@ export default function ResultsScreen() {
   const scoreNum = parseInt(score ?? '0')
   const hopsNum = parseInt(hops ?? '0')
   const optimalHopsNum = parseInt(optimalHops ?? '0')
+  const liveScoreNum = parseInt(liveScore ?? '0')
+  const nodeScoresList: NodeScore[] = nodeScores ? JSON.parse(decodeURIComponent(nodeScores)) : []
+  const nodeTotal = nodeScoresList.reduce((s, n) => s + n.points, 0)
 
   const playerLabels = playerPath ? decodeURIComponent(playerPath).split('|') : []
   const optimalLabels = optimalPath ? decodeURIComponent(optimalPath).split('|') : []
@@ -107,16 +130,48 @@ export default function ResultsScreen() {
       isOptimalPath: samePathAsOptimal,
       timeMs: totalMs,
       playedDate: localDateString(),
-    }).then(({ earnedXP, totalXP, newStreak }) => {
-      setEarnedXP(earnedXP)
-      console.log('[Results] XP awarded:', earnedXP, 'total:', totalXP, 'streak:', newStreak)
+    }).then(({ earnedXP: xp, totalXP, newStreak }) => {
+      setEarnedXP(xp)
+      setStreak(newStreak)
+
+      const prevTotalXP = totalXP - xp
+      const prevLevel = levelFromXP(prevTotalXP)
+      const newLevel = levelFromXP(totalXP)
+      const didLevelUp = newLevel > prevLevel
+
+      // Animate XP bar filling from previous position
+      const prevProgress = xpProgressInCurrentLevel(prevTotalXP)
+      const newProgress = xpProgressInCurrentLevel(totalXP)
+      const startFill = prevProgress.current / prevProgress.required
+      const endFill = didLevelUp ? 1 : newProgress.current / newProgress.required
+
+      xpBarAnim.setValue(startFill)
+      Animated.timing(xpBarAnim, {
+        toValue: endFill,
+        duration: 900,
+        delay: 400,
+        useNativeDriver: false,
+      }).start(() => {
+        if (didLevelUp) {
+          const unlocks = UNLOCK_MILESTONES.filter(m => m.level === newLevel)
+          setLevelUpData({
+            newLevel,
+            newTitle: titleForLevel(newLevel),
+            prevTitle: titleForLevel(prevLevel),
+            unlocks,
+            xpBarAnim: new Animated.Value(0),
+            xpBarOverflow: new Animated.Value(0),
+          })
+          setTimeout(() => setShowLevelUpModal(true), 200)
+        }
+      })
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId]) // re-run once userId is available
+  }, [userId])
 
   useEffect(() => {
     if (!puzzleId || hopsNum === 0) return
-    getPathStats(puzzleId, hopsNum).then(setPathStats)
+    getPathStats(puzzleId, hopsNum, optimalHopsNum, userId).then(setPathStats)
   }, [puzzleId, hopsNum])
 
   // Score count-up animation
@@ -208,11 +263,18 @@ export default function ResultsScreen() {
         <Text style={styles.grade}>{grade}</Text>
         <Text style={styles.scoreValue}>{displayScore}</Text>
         <Text style={styles.scoreLabel}>points</Text>
-        {earnedXP > 0 && (
-          <View style={styles.xpBadge}>
-            <Text style={styles.xpText}>+{earnedXP} XP</Text>
-          </View>
-        )}
+        <View style={styles.xpStreakRow}>
+          {earnedXP > 0 && (
+            <View style={styles.xpBadge}>
+              <Text style={styles.xpText}>+{earnedXP} XP</Text>
+            </View>
+          )}
+          {streak > 1 && (
+            <View style={styles.streakBadge}>
+              <Text style={styles.streakText}>🔥 {streak} day streak</Text>
+            </View>
+          )}
+        </View>
         <View style={styles.statsRow}>
           <View style={styles.stat}>
             <Text style={styles.statValue}>{minutes}:{seconds}</Text>
@@ -233,19 +295,83 @@ export default function ResultsScreen() {
         </View>
       </View>
 
-      {/* Path comparison */}
-      <View style={styles.pathsCard}>
-        {samePathAsOptimal && (
-          <View style={styles.optimalBanner}>
-            <Text style={styles.optimalBannerText}>⚡ You found the optimal path</Text>
-          </View>
-        )}
-        <View style={styles.pathCol}>
-          <Text style={styles.pathTitle}>{samePathAsOptimal ? 'Your Path = Optimal Path' : 'Your Path'}</Text>
-          <PathDisplay labels={playerLabels} color={beatOptimal ? '#22c55e' : samePathAsOptimal ? '#7c3aed' : '#eab308'} stepOpacities={playerStepOpacities} />
+      {/* XP progress bar */}
+      <View
+        style={styles.xpBarContainer}
+        onLayout={e => { xpBarWidth.current = e.nativeEvent.layout.width }}
+      >
+        <View style={styles.xpBarRow}>
+          <Text style={styles.xpBarLabel}>+{earnedXP} XP</Text>
+          <Text style={styles.xpBarLabelRight}>
+            {levelUpData ? `Level ${levelUpData.newLevel} 🎉` : ''}
+          </Text>
         </View>
-        {!samePathAsOptimal && (
+        <View style={styles.xpBarTrack}>
+          <Animated.View style={[
+            styles.xpBarFill,
+            { width: xpBarAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }) },
+          ]} />
+        </View>
+      </View>
+
+      {/* Level-up modal */}
+      <Modal visible={showLevelUpModal} transparent animationType="fade">
+        <View style={levelUpStyles.overlay}>
+          <View style={levelUpStyles.card}>
+            <Text style={levelUpStyles.emoji}>🐇</Text>
+            <Text style={levelUpStyles.levelText}>Level {levelUpData?.newLevel}</Text>
+            <Text style={levelUpStyles.titleText}>{levelUpData?.newTitle}</Text>
+            {levelUpData?.prevTitle !== levelUpData?.newTitle && (
+              <Text style={levelUpStyles.titleChange}>
+                {levelUpData?.prevTitle} → {levelUpData?.newTitle}
+              </Text>
+            )}
+            {levelUpData?.unlocks.map((u, i) => (
+              <View key={i} style={levelUpStyles.unlockBadge}>
+                <Text style={levelUpStyles.unlockText}>
+                  {u.type === 'difficulty'
+                    ? `🔓 ${u.unlock === 'medium' ? 'Medium' : 'Hard'} difficulty unlocked!`
+                    : `🔓 New category slot unlocked!`}
+                </Text>
+              </View>
+            ))}
+            <Pressable
+              style={levelUpStyles.btn}
+              onPress={() => {
+                setShowLevelUpModal(false)
+                if (levelUpData?.unlocks.some(u => u.type === 'category_slot')) {
+                  router.replace('/onboarding')
+                }
+              }}
+            >
+              <Text style={levelUpStyles.btnText}>
+                {levelUpData?.unlocks.some(u => u.type === 'category_slot')
+                  ? 'Pick a new topic →'
+                  : 'Keep going!'}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Path comparison */}
+      <View style={[styles.pathsCard, samePathAsOptimal && styles.pathsCardColumn]}>
+        {samePathAsOptimal ? (
           <>
+            <View style={styles.optimalBanner}>
+              <Text style={styles.optimalBannerText}>⚡ You found the optimal path</Text>
+            </View>
+            <View style={styles.pathCol}>
+              <Text style={styles.pathTitle}>Your Path = Optimal Path</Text>
+              <PathDisplay labels={playerLabels} color="#7c3aed" stepOpacities={playerStepOpacities} />
+            </View>
+          </>
+        ) : (
+          <>
+            <View style={styles.pathCol}>
+              <Text style={styles.pathTitle}>Your Path</Text>
+              <PathDisplay labels={playerLabels} color="#eab308" stepOpacities={playerStepOpacities} />
+            </View>
             <View style={styles.pathDivider} />
             <View style={styles.pathCol}>
               <Text style={styles.pathTitle}>Optimal Path</Text>
@@ -254,6 +380,34 @@ export default function ResultsScreen() {
           </>
         )}
       </View>
+
+      {/* Score breakdown */}
+      {nodeScoresList.length > 0 && (
+        <View style={styles.breakdownCard}>
+          <Text style={styles.breakdownTitle}>Score Breakdown</Text>
+          <View style={styles.breakdownRow}>
+            <Text style={styles.breakdownItem}>Time score</Text>
+            <Text style={styles.breakdownPts}>{liveScoreNum}</Text>
+          </View>
+          {nodeScoresList.map((n, i) => (
+            <View key={i} style={styles.breakdownRow}>
+              <Text style={styles.breakdownItem}>
+                {n.label}
+                <Text style={styles.breakdownCat}>
+                  {n.category === 'right_place' ? ' (right place)' : n.category === 'wrong_place' ? ' (wrong place)' : ' (wrong node)'}
+                </Text>
+              </Text>
+              <Text style={[styles.breakdownPts, n.points === 0 && styles.breakdownZero]}>
+                +{n.points}
+              </Text>
+            </View>
+          ))}
+          <View style={[styles.breakdownRow, styles.breakdownTotal]}>
+            <Text style={styles.breakdownTotalLabel}>Total</Text>
+            <Text style={styles.breakdownTotalPts}>{scoreNum}</Text>
+          </View>
+        </View>
+      )}
 
       {pathStats && pathStats.totalPlayers >= 2 && (
         <View style={styles.statsCard}>
@@ -340,6 +494,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
+  pathsCardColumn: { flexDirection: 'column' },
   pathCol: { flex: 1 },
   pathTitle: { color: colors.textTertiary, fontSize: 12, fontWeight: '600', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 },
   optimalBanner: { backgroundColor: colors.accentLight, borderRadius: 10, padding: 10, marginBottom: 14, alignItems: 'center', borderWidth: 1, borderColor: '#c4b5fd' },
@@ -371,6 +526,15 @@ const styles = StyleSheet.create({
   buttonText: { color: colors.textInverse, fontSize: 16, fontWeight: '700' },
   buttonSecondary: { paddingVertical: 12 },
   buttonSecondaryText: { color: colors.textTertiary, fontSize: 15 },
+  xpStreakRow: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+    marginBottom: 4,
+    flexWrap: 'wrap',
+  },
   xpBadge: {
     backgroundColor: colors.accentLight,
     borderColor: '#c4b5fd',
@@ -378,10 +542,40 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 6,
-    alignSelf: 'center',
-    marginTop: 8,
   },
   xpText: { color: colors.accent, fontSize: 16, fontWeight: '700' },
+  streakBadge: {
+    backgroundColor: '#fff7ed',
+    borderColor: '#fed7aa',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  streakText: { color: '#c2410c', fontSize: 15, fontWeight: '700' },
+  xpBarContainer: {
+    width: '100%',
+    marginBottom: 16,
+    paddingHorizontal: 4,
+  },
+  xpBarRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  xpBarLabel: { color: colors.textTertiary, fontSize: 12, fontWeight: '600' },
+  xpBarLabelRight: { color: colors.accent, fontSize: 12, fontWeight: '700' },
+  xpBarTrack: {
+    height: 8,
+    backgroundColor: colors.border,
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  xpBarFill: {
+    height: '100%',
+    backgroundColor: colors.accent,
+    borderRadius: 4,
+  },
   statsCard: {
     backgroundColor: colors.bgCard,
     borderRadius: 20,
@@ -409,4 +603,107 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   shareButtonText: { color: colors.textPrimary, fontSize: 16, fontWeight: '700' },
+  breakdownCard: {
+    backgroundColor: colors.bgCard,
+    borderRadius: 20,
+    padding: 20,
+    width: '100%',
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  breakdownTitle: {
+    color: colors.textTertiary,
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 12,
+  },
+  breakdownRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  breakdownItem: { color: colors.textPrimary, fontSize: 14, flex: 1 },
+  breakdownCat: { color: colors.textTertiary, fontSize: 12, fontStyle: 'italic' },
+  breakdownPts: { color: colors.accent, fontSize: 14, fontWeight: '700' },
+  breakdownZero: { color: colors.textTertiary },
+  breakdownTotal: {
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    marginTop: 8,
+    paddingTop: 8,
+  },
+  breakdownTotalLabel: { color: colors.textPrimary, fontSize: 15, fontWeight: '700', flex: 1 },
+  breakdownTotalPts: { color: colors.textPrimary, fontSize: 15, fontWeight: '800' },
+})
+
+const levelUpStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+  },
+  card: {
+    backgroundColor: colors.bgCard,
+    borderRadius: 28,
+    padding: 36,
+    alignItems: 'center',
+    width: '100%',
+    borderWidth: 1,
+    borderColor: '#c4b5fd',
+    shadowColor: colors.accent,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 12,
+  },
+  emoji: { fontSize: 56, marginBottom: 12 },
+  levelText: {
+    color: colors.textPrimary,
+    fontSize: 42,
+    fontWeight: '900',
+    letterSpacing: -1,
+    marginBottom: 4,
+  },
+  titleText: {
+    color: colors.accent,
+    fontSize: 22,
+    fontWeight: '800',
+    marginBottom: 8,
+  },
+  titleChange: {
+    color: colors.textTertiary,
+    fontSize: 13,
+    marginBottom: 16,
+  },
+  unlockBadge: {
+    backgroundColor: colors.accentLight,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#c4b5fd',
+  },
+  unlockText: {
+    color: colors.accent,
+    fontSize: 15,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  btn: {
+    backgroundColor: colors.accent,
+    borderRadius: 14,
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    marginTop: 24,
+    width: '100%',
+    alignItems: 'center',
+  },
+  btnText: { color: '#fff', fontSize: 17, fontWeight: '700' },
 })
