@@ -192,7 +192,7 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'runs on'),
   // Game → featured character (P674, fictional characters only)
   sq('easy', ['game', 'person'], (limit) => `
-SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
   ?a wdt:P31 wd:Q7889; wdt:P674 ?b.
   ?b wdt:P31 wd:Q15773347.
   ?a wikibase:sitelinks ?links. FILTER(?links > 15)
@@ -201,7 +201,7 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'features character'),
   // Game → narrative setting (P840)
   sq('easy', ['game', 'location'], (limit) => `
-SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
   ?a wdt:P31 wd:Q7889; wdt:P840 ?b.
   ?a wikibase:sitelinks ?links. FILTER(?links > 15)
   ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 15)
@@ -209,7 +209,7 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'set in'),
   // Game → composer (P86)
   sq('hard', ['game', 'person'], (limit) => `
-SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
   ?a wdt:P31 wd:Q7889; wdt:P86 ?b.
   ?b wdt:P31 wd:Q5.
   ?a wikibase:sitelinks ?links. FILTER(?links > 15)
@@ -218,7 +218,7 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'music composed by'),
   // Game → director (P57)
   sq('medium', ['game', 'person'], (limit) => `
-SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
   ?a wdt:P31 wd:Q7889; wdt:P57 ?b.
   ?b wdt:P31 wd:Q5.
   ?a wikibase:sitelinks ?links. FILTER(?links > 15)
@@ -867,6 +867,7 @@ function bindingsToEntityMap(
     const bId = extractId(binding.b.value)
     const bLabel = binding.bLabel?.value ?? bId
     const sitelinks = binding.links ? parseInt(binding.links.value) : undefined
+    const bSitelinks = binding.blinks ? parseInt(binding.blinks.value) : undefined
     if (aLabel.startsWith('Q') && /^Q\d+$/.test(aLabel)) continue
     if (bLabel.startsWith('Q') && /^Q\d+$/.test(bLabel)) continue
     if (!entityMap.has(aId)) {
@@ -878,11 +879,12 @@ function bindingsToEntityMap(
     }
     entityMap.get(aId)!.relatedIds.push(bId)
     if (!entityMap.has(bId)) {
-      entityMap.set(bId, { id: bId, label: bLabel, relatedIds: [aId], entityType: bType })
+      entityMap.set(bId, { id: bId, label: bLabel, relatedIds: [aId], sitelinks: bSitelinks, entityType: bType })
     } else {
       const b = entityMap.get(bId)!
       if (!b.relatedIds.includes(aId)) b.relatedIds.push(aId)
       if (bType && !b.entityType) b.entityType = bType
+      if (bSitelinks !== undefined && (!b.sitelinks || bSitelinks > b.sitelinks)) b.sitelinks = bSitelinks
     }
   }
   return entityMap
