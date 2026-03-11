@@ -211,7 +211,7 @@ async function runDifficulty(difficulty: Difficulty, entityLimit: number): Promi
       // Narrative was generated during dry-run story selection — use it directly
       const narrative = draft.narrative ?? ''
 
-      await supabase.from('puzzles').upsert({
+      const { error: upsertError } = await supabase.from('puzzles').upsert({
         category_id: await getCategoryId(domain),
         date,
         start_concept: capitalize(puzzle.bubbles.find((b: any) => b.id === puzzle.startId)?.label ?? puzzle.startId),
@@ -225,6 +225,7 @@ async function runDifficulty(difficulty: Difficulty, entityLimit: number): Promi
         qc_score: draft.qcScore,
         edge_labels: draft.edgeLabels ?? null,
       }, { onConflict: 'category_id,date,difficulty' })
+      if (upsertError) throw new Error(`Supabase upsert failed: ${upsertError.message}`)
 
       console.log(`[${domain}/${difficulty}] ✓ Published (from draft)`)
       return { domain, difficulty, score: draft.qcScore, pass: true, path: pathLabels, issues: [], qualityScore: draft.qualityScore }
@@ -248,6 +249,8 @@ async function runDifficulty(difficulty: Difficulty, entityLimit: number): Promi
   const candidates: Array<{ puzzle: ComposedPuzzle; pathLabels: string[]; qualityScore: number; edgeLabels: Record<string, string> }> = []
   const usedStartEnds = new Set<string>()
 
+  const entityMap = new Map(filtered.map((e: any) => [e.id, e]))
+
   for (let attempt = 0; attempt < MAX_LLM_CANDIDATES * 3 && candidates.length < MAX_LLM_CANDIDATES; attempt++) {
     const puzzle = composePuzzleForDifficulty({ entities: filtered, graph, entityIds, targetDifficulty: difficulty, domainOverrides, intermediateFilterConfig })
     if (!puzzle) continue
@@ -257,7 +260,6 @@ async function runDifficulty(difficulty: Difficulty, entityLimit: number): Promi
     if (usedStartEnds.has(pairKey)) continue
     usedStartEnds.add(pairKey)
 
-    const entityMap = new Map(filtered.map((e: any) => [e.id, e]))
     const pathLabels = puzzle.optimalPath.map((id: string) => entityMap.get(id)?.label ?? id)
 
     // Cross-day deduplication check (dry-run only — publish uses the saved draft)
@@ -296,7 +298,20 @@ async function runDifficulty(difficulty: Difficulty, entityLimit: number): Promi
   const llmCandidates: PuzzleCandidate[] = candidates.map((c, i) => ({ pathLabels: c.pathLabels, index: i }))
 
   console.log(`[${domain}/${difficulty}] Evaluating ${candidates.length} candidate(s) for story quality...`)
-  const selection = await evaluateAndSelectPuzzle(llmCandidates, domain, difficulty, connectionType)
+  let selection
+  try {
+    selection = await evaluateAndSelectPuzzle(llmCandidates, domain, difficulty, connectionType)
+  } catch (err: any) {
+    console.log(`[${domain}/${difficulty}] LLM evaluation failed: ${err.message}`)
+    return {
+      domain, difficulty,
+      score: 0,
+      pass: false,
+      path: candidates[0]?.pathLabels ?? [],
+      issues: ['LLM evaluation error'],
+      qualityScore: candidates[0]?.qualityScore ?? 0,
+    }
+  }
 
   if (!selection || !selection.qcResult.pass) {
     const score = selection?.qcResult.score ?? 0
@@ -314,6 +329,17 @@ async function runDifficulty(difficulty: Difficulty, entityLimit: number): Promi
   }
 
   const winner = candidates[selection.winnerIndex]
+  if (!winner) {
+    console.log(`[${domain}/${difficulty}] LLM returned invalid winner index ${selection.winnerIndex}`)
+    return {
+      domain, difficulty,
+      score: 0,
+      pass: false,
+      path: candidates[0]?.pathLabels ?? [],
+      issues: ['invalid winner index from LLM'],
+      qualityScore: candidates[0]?.qualityScore ?? 0,
+    }
+  }
   const storyScoresStr = selection.storyScores.map((s, i) => `${i + 1}:${s}`).join(' ')
   console.log(`[${domain}/${difficulty}] QC: ✓ PASS (${selection.qcResult.score}/10) — story scores: [${storyScoresStr}] — winner: ${selection.winnerIndex + 1}`)
   console.log(`[${domain}/${difficulty}] Path: ${winner.pathLabels.join(' → ')}`)
