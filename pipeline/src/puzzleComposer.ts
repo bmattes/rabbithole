@@ -277,7 +277,7 @@ function findAlternativePaths(
   const maxLength = optimalLength + maxExtra
   const results: string[][] = []
 
-  const dfs = (current: string, path: string[]) => {
+  const dfs = (current: string, path: string[], visited: Set<string>) => {
     if (results.length >= cap) return
     if (current === endId) {
       if (path.length > optimalLength) {
@@ -287,15 +287,18 @@ function findAlternativePaths(
     }
     if (path.length >= maxLength) return
     for (const neighbor of graph[current] ?? []) {
-      if (!path.includes(neighbor)) {
+      if (!visited.has(neighbor)) {
+        visited.add(neighbor)
         path.push(neighbor)
-        dfs(neighbor, path)
+        dfs(neighbor, path, visited)
         path.pop()
+        visited.delete(neighbor)
       }
     }
   }
 
-  dfs(startId, [startId])
+  const visited = new Set<string>([startId])
+  dfs(startId, [startId], visited)
   return results
 }
 
@@ -419,12 +422,20 @@ export function composePuzzle({
     const altPathNodeIds = new Set<string>()
     for (const altPath of altPaths) {
       for (const id of altPath) {
-        if (id !== startId && id !== endId) altPathNodeIds.add(id)
+        // Only add nodes not already covered by the optimal path
+        if (!pathIds.has(id)) altPathNodeIds.add(id)
       }
     }
-    // Collect all path nodes (optimal + alt) that have good labels
-    const allPathNodeIds = new Set([...pathIds, ...altPathNodeIds])
-    const altNodes = [...altPathNodeIds].filter(hasGoodLabel)
+    // Collect unique alt-path intermediates with readable labels,
+    // capped so they can never overflow the bubble count.
+    // Reserve 1 slot minimum for at least one filler/distractor beyond the optimal path.
+    const altNodesCap = targetBubbleCount - optimalPath.length - 1
+    const altNodes = [...altPathNodeIds]
+      .filter(hasGoodLabel)
+      .slice(0, Math.max(0, altNodesCap))
+
+    // Collect all path nodes (optimal + admitted alt nodes) for filler selection
+    const allPathNodeIds = new Set([...pathIds, ...altNodes])
 
     // Fill remaining slots after optimal path + alt path nodes
     const slotsAfterPaths = targetBubbleCount - optimalPath.length - altNodes.length
@@ -433,11 +444,12 @@ export function composePuzzle({
           .filter(hasGoodLabel)
           .slice(0, slotsAfterPaths)
       : []
-    // Any filler that connects to >1 path node — zero them (shouldn't happen, but guard)
+    // Guard: zero out any filler node that has no connections to any path node
+    // (completely disconnected nodes that slipped through the branch-distractor filter)
     filler.forEach(id => {
       const neighbors = new Set(graph[id] ?? [])
-      const connections = [...allPathNodeIds].filter(pid => neighbors.has(pid))
-      if (connections.length === 0) zeroConnectionIds.add(id)
+      const pathConnCount = [...allPathNodeIds].filter(pid => neighbors.has(pid)).length
+      if (pathConnCount === 0) zeroConnectionIds.add(id)
     })
 
     middleIds = [
@@ -509,9 +521,14 @@ export function composePuzzle({
 
   // For hard mode: find alternative paths in the trimmed bubble graph
   // (these are longer routes the player can discover as non-optimal solutions)
-  const alternativePaths = distractorMode === 'hard'
-    ? findAlternativePaths(startId, endId, trimmedGraph, trueOptimalPath.length, 2, 10)
-    : undefined
+  let alternativePaths: string[][] | undefined
+  if (distractorMode === 'hard') {
+    alternativePaths = findAlternativePaths(startId, endId, trimmedGraph, trueOptimalPath.length, 2, 10)
+    // Hard puzzles must have genuine multi-path structure in the final bubble subgraph.
+    // If no alternate path survived trimming, reject this composition so the caller
+    // retries with a different Start/End pair.
+    if (alternativePaths.length === 0) return null
+  }
 
   return { startId, endId, bubbles, connections, optimalPath: trueOptimalPath, difficulty, alternativePaths }
 }

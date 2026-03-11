@@ -123,25 +123,34 @@ describe('Medium branch distractors', () => {
 })
 
 // --- Multi-path graph for Hard tests ---
-// Optimal path:  Q1 → Q2 → Q3 → Q4 → Q5 → Q6  (5 hops)
-// Alt path A:    Q1 → Q2 → Q7 → Q8 → Q5 → Q6  (5 hops — same length, different intermediates)
-// Alt path B:    Q1 → Q2 → Q3 → Q4 → Q9 → Q6  (5 hops — diverges at Q4)
-// Isolated distractors: Q10–Q14
+// Optimal path (3 hops, 4 nodes):  Q1 → Q2 → Q3 → Q4
+// Alt path A (5 hops, 6 nodes):    Q1 → Q2 → Q5 → Q6 → Q7 → Q4
+//   (detours through Q5→Q6→Q7 before reaching Q4)
+// Alt path B (5 hops, 6 nodes):    Q1 → Q8 → Q9 → Q10 → Q3 → Q4
+//   (goes around the left side through Q8→Q9→Q10 then rejoins Q3)
+// Note: findAlternativePaths finds paths strictly LONGER than optimal (len>4),
+//   so alt paths must have more nodes than the 4-node optimal.
+// Isolated distractors: Q20–Q24
 const multiPathEntities: Entity[] = [
-  { id: 'Q1',  label: 'Start Node',   relatedIds: ['Q2'] },
-  { id: 'Q2',  label: 'Hub Node',     relatedIds: ['Q1', 'Q3', 'Q7'] },
-  { id: 'Q3',  label: 'Mid A',        relatedIds: ['Q2', 'Q4'] },
-  { id: 'Q4',  label: 'Mid B',        relatedIds: ['Q3', 'Q5', 'Q9'] },
-  { id: 'Q5',  label: 'Pre End',      relatedIds: ['Q4', 'Q6', 'Q8'] },
-  { id: 'Q6',  label: 'End Node',     relatedIds: ['Q5', 'Q9'] },
-  { id: 'Q7',  label: 'Alt Mid One',  relatedIds: ['Q2', 'Q8'] },
-  { id: 'Q8',  label: 'Alt Mid Two',  relatedIds: ['Q7', 'Q5'] },
-  { id: 'Q9',  label: 'Alt Pre End',  relatedIds: ['Q4', 'Q6'] },
-  { id: 'Q10', label: 'Island One',   relatedIds: [] },
-  { id: 'Q11', label: 'Island Two',   relatedIds: [] },
-  { id: 'Q12', label: 'Island Three', relatedIds: [] },
-  { id: 'Q13', label: 'Island Four',  relatedIds: [] },
-  { id: 'Q14', label: 'Island Five',  relatedIds: [] },
+  // Optimal spine
+  { id: 'Q1',  label: 'Start Node',    relatedIds: ['Q2', 'Q8'] },
+  { id: 'Q2',  label: 'Junction',      relatedIds: ['Q1', 'Q3', 'Q5'] },
+  { id: 'Q3',  label: 'Mid Core',      relatedIds: ['Q2', 'Q4', 'Q10'] },
+  { id: 'Q4',  label: 'End Node',      relatedIds: ['Q3', 'Q7', 'Q10'] },
+  // Alt path A detour nodes
+  { id: 'Q5',  label: 'Alt Branch A1', relatedIds: ['Q2', 'Q6'] },
+  { id: 'Q6',  label: 'Alt Branch A2', relatedIds: ['Q5', 'Q7'] },
+  { id: 'Q7',  label: 'Alt Bridge',    relatedIds: ['Q6', 'Q4'] },
+  // Alt path B detour nodes
+  { id: 'Q8',  label: 'Alt Branch B1', relatedIds: ['Q1', 'Q9'] },
+  { id: 'Q9',  label: 'Alt Branch B2', relatedIds: ['Q8', 'Q10'] },
+  { id: 'Q10', label: 'Alt Bridge B',  relatedIds: ['Q9', 'Q3', 'Q4'] },
+  // Isolated distractors
+  { id: 'Q20', label: 'Island One',    relatedIds: [] },
+  { id: 'Q21', label: 'Island Two',    relatedIds: [] },
+  { id: 'Q22', label: 'Island Three',  relatedIds: [] },
+  { id: 'Q23', label: 'Island Four',   relatedIds: [] },
+  { id: 'Q24', label: 'Island Five',   relatedIds: [] },
 ]
 
 /**
@@ -178,8 +187,8 @@ describe('Hard multi-path puzzles', () => {
       entities: multiPathEntities,
       graph,
       startId: 'Q1',
-      endId: 'Q6',
-      params: { minPathLength: 5, obscureThreshold: 0 },
+      endId: 'Q4',
+      params: { minPathLength: 4, obscureThreshold: 0 },
       domainOverrides: testOverrides,
       distractorMode: 'hard',
     })
@@ -194,8 +203,8 @@ describe('Hard multi-path puzzles', () => {
       entities: multiPathEntities,
       graph,
       startId: 'Q1',
-      endId: 'Q6',
-      params: { minPathLength: 5, obscureThreshold: 0 },
+      endId: 'Q4',
+      params: { minPathLength: 4, obscureThreshold: 0 },
       domainOverrides: testOverrides,
       distractorMode: 'hard',
     })
@@ -210,8 +219,8 @@ describe('Hard multi-path puzzles', () => {
       entities: multiPathEntities,
       graph,
       startId: 'Q1',
-      endId: 'Q6',
-      params: { minPathLength: 5, obscureThreshold: 0 },
+      endId: 'Q4',
+      params: { minPathLength: 4, obscureThreshold: 0 },
       domainOverrides: testOverrides,
       distractorMode: 'hard',
     })
