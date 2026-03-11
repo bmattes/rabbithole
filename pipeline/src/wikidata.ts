@@ -216,12 +216,12 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
   ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 25)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'signed to'),
-  // Rock artist → influenced by (hard)
+  // Rock artist → influenced by (hard: both artist and influence must be rock/adjacent genre)
   sq('hard', ['person', 'person'], (limit) => `
 SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
   VALUES ?genre { wd:Q11399 wd:Q5647 wd:Q38848 wd:Q484641 wd:Q45981 }
   ?a wdt:P31 wd:Q5; wdt:P106 wd:Q639669; wdt:P737 ?b; wdt:P136 ?genre.
-  ?b wdt:P31 wd:Q5; wdt:P106 wd:Q639669.
+  ?b wdt:P31 wd:Q5; wdt:P106 wd:Q639669; wdt:P136 ?genre.
   ?a wikibase:sitelinks ?links. FILTER(?links > 40)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'influenced by'),
@@ -256,7 +256,7 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
 SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
   VALUES ?genre { wd:Q11401 wd:Q131272 }
   ?a wdt:P31 wd:Q5; wdt:P106 wd:Q639669; wdt:P737 ?b; wdt:P136 ?genre.
-  ?b wdt:P31 wd:Q5; wdt:P106 wd:Q639669.
+  ?b wdt:P31 wd:Q5; wdt:P106 wd:Q639669; wdt:P136 ?genre.
   ?a wikibase:sitelinks ?links. FILTER(?links > 40)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'influenced by'),
@@ -291,7 +291,7 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
 SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
   VALUES ?genre { wd:Q37073 wd:Q484641 }
   ?a wdt:P31 wd:Q5; wdt:P106 wd:Q639669; wdt:P737 ?b; wdt:P136 ?genre.
-  ?b wdt:P31 wd:Q5; wdt:P106 wd:Q639669.
+  ?b wdt:P31 wd:Q5; wdt:P106 wd:Q639669; wdt:P136 ?genre.
   ?a wikibase:sitelinks ?links. FILTER(?links > 40)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'influenced by'),
@@ -326,7 +326,7 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
 SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
   VALUES ?genre { wd:Q131272 wd:Q213714 wd:Q206159 }
   ?a wdt:P31 wd:Q5; wdt:P106 wd:Q639669; wdt:P737 ?b; wdt:P136 ?genre.
-  ?b wdt:P31 wd:Q5; wdt:P106 wd:Q639669.
+  ?b wdt:P31 wd:Q5; wdt:P106 wd:Q639669; wdt:P136 ?genre.
   ?a wikibase:sitelinks ?links. FILTER(?links > 40)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'influenced by'),
@@ -361,7 +361,7 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
 SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
   VALUES ?genre { wd:Q83440 wd:Q1190434 wd:Q1287394 }
   ?a wdt:P31 wd:Q5; wdt:P106 wd:Q639669; wdt:P737 ?b; wdt:P136 ?genre.
-  ?b wdt:P31 wd:Q5; wdt:P106 wd:Q639669.
+  ?b wdt:P31 wd:Q5; wdt:P106 wd:Q639669; wdt:P136 ?genre.
   ?a wikibase:sitelinks ?links. FILTER(?links > 30)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'influenced by'),
