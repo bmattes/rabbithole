@@ -92,25 +92,34 @@ npx jest --no-coverage        # run tests
 Use `agent-loop.ts` — one subagent per domain, all dispatched in parallel. Each agent:
 1. Runs dry-run QC for all 3 difficulties
 2. Diagnoses failures and adjusts `DOMAIN_CONFIG` (hub threshold, quality floor, etc.)
-3. Retries up to 6 rounds until all 3 pass
+3. Retries up to 10 rounds until all 3 pass
 4. Publishes passing puzzles; partial publish if some difficulties still fail
 
 ```bash
 # From pipeline/ directory:
 npx ts-node src/scripts/agent-loop.ts --domain <domain> --date YYYY-MM-DD
+
+# To overwrite already-published puzzles (re-run from scratch):
+npx ts-node src/scripts/agent-loop.ts --domain <domain> --date YYYY-MM-DD --force
 ```
 
 **To run all domains**: dispatch one `Agent` tool call per domain simultaneously (they are independent and safe to parallelize). Use `subagent_type: general-purpose`. Active Wikidata domains: `history`, `movies`, `soccer`, `science`, `geography`, `literature`, `philosophy`, `royals`, `military`, `space`, `food`, `comics`, `tv`, `videogames`, `art`, `basketball`, `americanfootball`. Music genres (Wikidata-backed, pass as `mb_*` domain name): `mb_rock`, `mb_hiphop`, `mb_pop`, `mb_country`, `mb_rnb`.
 
-**Before dispatching**: check what's already published to avoid redundant work:
+**To re-run ALL domains fresh** (overwrite everything): pass `--force` to each agent. No DB wipe needed — `--force` bypasses the `isAlreadyPublished` check. Always verify coverage afterward:
 ```bash
-# From pipeline/ directory:
+node check-today.js   # run from pipeline/ — lists any still-missing difficulties
+```
+
+**Before a normal dispatch** (fill gaps only): check what's already published first:
+```bash
 node check-today.js   # lists categories missing puzzles for today
 ```
 
 **Entity caches** live in `pipeline/.entity-cache/` (7-day TTL). First attempt uses cache; retries force-refresh. Caches ARE used — slow retries are due to force-refresh + MusicBrainz rate limiting, not cache misses.
 
 **Puzzle date**: always use today's date so tomorrow's run doesn't stomp. Pass `--date YYYY-MM-DD` explicitly.
+
+**Story-driven selection**: `run-domain.ts` collects up to 5 candidate paths before calling the LLM. One GPT-4o call (`evaluateAndSelectPuzzle` in `puzzleQC.ts`) evaluates all candidates for validity + story quality, picks the winner, and writes the narrative. Narrative is stored in the draft and used directly on publish — no separate narrative generation call, no hallucination risk.
 
 ### Legacy sequential runner
 ```bash
@@ -120,7 +129,9 @@ Runs all 26 categories sequentially. Slower and harder to monitor — prefer the
 
 ## Pipeline — Domain-Specific Notes
 
-- **food, space**: country nodes (e.g. Egypt, Germany) create wrong-domain bridges — stripped via `COUNTRY_STRIP_DOMAINS` in `run-domain.ts`
+- **food**: country nodes (Italy, Japan, etc.) are valid bridges for food — NOT in `COUNTRY_STRIP_DOMAINS`. Countries like Italy→pizza, Japan→sushi are core to the food graph.
+- **space**: country nodes create wrong-domain bridges — stripped via `COUNTRY_STRIP_DOMAINS` in `run-domain.ts`
+- **literature, art**: `field` entity type (literary movements, art movements) are valid puzzle bridges — preserved by `FIELD_BRIDGE_DOMAINS` in `run-domain.ts`. Other domains strip `field` nodes as unguessable.
 - **mb_* music domains**: now Wikidata-backed (not MusicBrainz) — genre-filtered SPARQL subqueries, pageview enrichment works, no rate limiting. Hard difficulty tends toward label-hub paths; agent-loop auto-tunes `hubRelatedIdsThreshold` to fix this.
 - **tennis easy**: structurally impossible — person→team graph can't produce 4-hop paths with only 194 anchors; tennis easy will always fail
 - **sport**: medium/hard permanently broken (Wikidata multi-subquery timeouts); set `active=false`; easy works but not useful alone
