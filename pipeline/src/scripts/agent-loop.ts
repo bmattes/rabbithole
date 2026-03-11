@@ -49,7 +49,7 @@ if (!domainArg || !dateArg) {
 
 const domain = domainArg as CategoryDomain
 const date = dateArg
-const MAX_ROUNDS = 6
+const MAX_ROUNDS = 10
 const SCRIPT_DIR = path.join(__dirname)
 
 interface RoundResult {
@@ -177,9 +177,13 @@ async function run() {
   // Read current config for this domain from sidecar file
   let currentOverrides: DomainOverrides = readDomainOverrides(domain)
 
+  // Accumulate best passing result per difficulty across all rounds
+  const bestResults = new Map<string, RoundResult>()
+
   let lastResults: RoundResult[] = []
   let round = 0
   let nextForceRefresh = false  // escalate to force-refresh when diagnosis requests it
+  let stuckCount = 0  // rounds with no config change and no improvement
 
   while (round < MAX_ROUNDS) {
     round++
@@ -189,57 +193,75 @@ async function run() {
     lastResults = runDryRun('', nextForceRefresh)
     nextForceRefresh = false  // reset after use
 
+    // Accumulate passing results — keep best score per difficulty
+    for (const r of lastResults) {
+      if (r.pass) {
+        const existing = bestResults.get(r.difficulty)
+        if (!existing || r.score > existing.score) {
+          bestResults.set(r.difficulty, r)
+        }
+      }
+    }
+
     const passing = lastResults.filter(r => r.pass).length
     const total = lastResults.length
-    console.log(`\n  Results: ${passing}/${total} passed (${3 - total} not composed)`)
+    const totalPassed = bestResults.size
+    console.log(`\n  Results: ${passing}/${total} passed (${3 - total} not composed) — ${totalPassed}/3 total passing`)
 
-    // Success condition: all 3 difficulties composed and passed QC
-    if (total === 3 && passing === 3) {
-      console.log(`\n✓ All 3 difficulties pass for ${domain}! Running publish pass...`)
+    // Publish any newly passing difficulties immediately so we don't lose them
+    if (passing > 0) {
+      console.log(`\n  Publishing ${passing} passing difficult${passing === 1 ? 'y' : 'ies'}...`)
       runPublish()
-      console.log(`\nFINAL ${JSON.stringify({ domain, status: 'success', rounds: round, results: lastResults })}`)
+    }
+
+    // Success condition: all 3 difficulties have passed (across all rounds)
+    if (totalPassed === 3) {
+      console.log(`\n✓ All 3 difficulties pass for ${domain}!`)
+      console.log(`\nFINAL ${JSON.stringify({ domain, status: 'success', rounds: round, results: Array.from(bestResults.values()) })}`)
       process.exit(0)
     }
 
-    // Diagnose and update config
+    // Diagnose failures using this round's results
     const diagnosis = diagnose(lastResults, currentOverrides)
     if (!diagnosis) {
       console.log('  No further adjustments possible.')
-      break
-    }
-
-    const { overrides: suggested, forceRefresh: shouldRefresh } = diagnosis
-
-    // If diagnosis requests a cache refresh, schedule it for next round
-    if (shouldRefresh) nextForceRefresh = true
-
-    // Update config if something changed; if unchanged but refresh is requested, still continue
-    if (JSON.stringify(suggested) !== JSON.stringify(currentOverrides)) {
-      currentOverrides = suggested
-      updateDomainConfig(currentOverrides)
-    } else if (!shouldRefresh) {
-      // Nothing changed and no refresh scheduled — no point retrying
-      console.log('  Config unchanged and no refresh needed — stopping early.')
-      break
+      stuckCount++
     } else {
-      console.log('  Config unchanged but forcing entity refresh next round.')
+      const { overrides: suggested, forceRefresh: shouldRefresh } = diagnosis
+
+      if (shouldRefresh) nextForceRefresh = true
+
+      if (JSON.stringify(suggested) !== JSON.stringify(currentOverrides)) {
+        currentOverrides = suggested
+        updateDomainConfig(currentOverrides)
+        stuckCount = 0  // reset stuck counter on config change
+      } else if (shouldRefresh) {
+        console.log('  Config unchanged but forcing entity refresh next round.')
+        stuckCount = 0
+      } else {
+        stuckCount++
+        console.log(`  Config unchanged and no refresh needed (stuck ${stuckCount}/3).`)
+      }
+    }
+
+    // If stuck for 3 rounds with no improvement, force a cache refresh and keep going
+    if (stuckCount >= 3) {
+      console.log('  Forcing cache refresh to break out of stuck state.')
+      nextForceRefresh = true
+      stuckCount = 0
     }
   }
 
-  // Partial success: publish what passed, report what didn't
-  const passing = lastResults.filter(r => r.pass)
-  if (passing.length > 0) {
-    console.log(`\n⚠ Partial success (${passing.length}/3). Running publish for passing difficulties...`)
-    runPublish()
-  }
-
+  // Final report
+  const allResults = Array.from(bestResults.values())
+  const finalPassing = allResults.filter(r => r.pass).length
   console.log(`\nFINAL ${JSON.stringify({
     domain,
-    status: lastResults.filter(r => r.pass).length === 3 ? 'success' : 'partial',
+    status: finalPassing === 3 ? 'success' : 'partial',
     rounds: round,
-    results: lastResults,
+    results: allResults,
   })}`)
-  process.exit(lastResults.filter(r => r.pass).length === 3 ? 0 : 1)
+  process.exit(finalPassing === 3 ? 0 : 1)
 }
 
 run().catch(err => { console.error(err); process.exit(2) })

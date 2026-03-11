@@ -176,8 +176,28 @@ interface DomainResult {
   qualityScore?: number
 }
 
+async function isAlreadyPublished(difficulty: Difficulty): Promise<boolean> {
+  const categoryId = await getCategoryId(domain)
+  if (!categoryId) return false
+  const { data } = await supabase
+    .from('puzzles')
+    .select('id')
+    .eq('category_id', categoryId)
+    .eq('date', date)
+    .eq('difficulty', difficulty)
+    .eq('status', 'published')
+    .limit(1)
+  return (data?.length ?? 0) > 0
+}
+
 async function runDifficulty(difficulty: Difficulty, entityLimit: number): Promise<DomainResult | null> {
   const domainOverrides = readDomainOverrides(domain)
+
+  // Skip difficulties that are already published (both dry-run and publish passes)
+  if (await isAlreadyPublished(difficulty)) {
+    console.log(`[${domain}/${difficulty}] ✓ Already published for ${date}, skipping`)
+    return { domain, difficulty, score: 10, pass: true, path: [], issues: [], qualityScore: 0 }
+  }
 
   // On publish pass: reuse the draft puzzle from dry-run to avoid non-determinism
   if (!DRY_RUN) {
