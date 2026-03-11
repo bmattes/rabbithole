@@ -31,6 +31,18 @@ interface QCResult {
   verdict: string
 }
 
+export interface PuzzleCandidate {
+  pathLabels: string[]   // human-readable labels in order
+  index: number          // original index in the candidates array
+}
+
+export interface SelectionResult {
+  winnerIndex: number              // index into the candidates array
+  narrative: string                // narrative for the winner
+  storyScores: number[]            // story quality score 1-10 per candidate
+  qcResult: QCResult               // validity QC for the winner
+}
+
 // Three-tier personas per domain: easy=casual fan, medium=enthusiast, hard=expert.
 // Easy puzzles are reviewed by a casual player — catches things that are trivially obvious.
 // Hard puzzles are reviewed by an expert — catches things that are too obscure even for superfans.
@@ -291,6 +303,147 @@ Pass if overall_score >= 7 AND no hop scores below 4. Also fail if this is a har
     score,
     issues,
     verdict: parsed.verdict,
+  }
+}
+
+export async function evaluateAndSelectPuzzle(
+  candidates: PuzzleCandidate[],
+  domain: string,
+  difficulty: string,
+  connectionType: string,
+): Promise<SelectionResult | null> {
+  if (candidates.length === 0) return null
+
+  const personaTier = REVIEWER_PERSONAS[domain]
+  const defaultPersonas: PersonaTier = {
+    easy:   'You are a curious layperson with broad general knowledge.',
+    medium: 'You are a well-read enthusiast with solid knowledge across many topics.',
+    hard:   'You are a specialist with deep expert knowledge.',
+  }
+  const persona = (personaTier ?? defaultPersonas)[difficulty as keyof PersonaTier] ?? defaultPersonas.medium
+
+  const difficultyExpectation = {
+    easy:   'EASY puzzle — solvable by a casual fan, but not trivially obvious.',
+    medium: 'MEDIUM puzzle — requires real knowledge, not just pop culture familiarity.',
+    hard:   'HARD puzzle — genuinely challenges enthusiasts. Flag hops that are too easy for hard difficulty.',
+  }[difficulty] ?? ''
+
+  const domainNotes: Record<string, string> = {
+    videogames: 'Real-world locations are VALID when games are set there. Game genres and platforms are VALID.',
+    movies: 'Real-world locations are VALID as filming locations or settings. Film genres and awards are VALID.',
+    tv: 'TV networks, genres, and fictional characters are all VALID bridge nodes.',
+    geography: 'Films are VALID bridges when filmed in one of the cities.',
+    soccer: 'Countries (birthplace) and playing positions are VALID.',
+    basketball: 'Universities and basketball awards are VALID.',
+    americanfootball: 'Playing positions and coaches are VALID.',
+    literature: 'Literary genres and universities are VALID.',
+    art: 'Countries (birthplace) and art schools are VALID alongside movements.',
+    comics: 'Artistic and literary movements are VALID.',
+    music: 'Musical genres are VALID.',
+    science: 'Universities, awards, and intellectual influences are VALID.',
+    history: 'Universities and prestigious awards are VALID.',
+    philosophy: 'Universities and academic institutions are VALID.',
+    military: 'Military academies are VALID.',
+    royals: 'Schools, universities, and countries of birth are VALID.',
+    space: 'Space missions, spacecraft, launch vehicles, and space agencies are all VALID.',
+    food: 'Famous chefs who created dishes are VALID.',
+    mb_rock: 'Record labels and songs are VALID at easy/medium. At hard, musical influences are the expected type — artist→major label is too_easy for hard.',
+    mb_hiphop: 'Record labels and songs are VALID. Related genre artists with hip-hop connections are VALID.',
+    mb_country: 'Record labels and songs are VALID. Bluegrass and Americana artists are VALID.',
+  }
+  const domainNote = domainNotes[domain] ?? ''
+
+  const candidateList = candidates
+    .map((c, i) => `Candidate ${i + 1}: ${c.pathLabels.join(' → ')}`)
+    .join('\n')
+
+  const prompt = `${persona}
+
+You are selecting the best puzzle for RabbitHole, a daily trivia game where players hop through connected concepts.
+Difficulty: ${difficulty} (${difficultyExpectation})
+Category: ${domain} | Connections via: ${connectionType}
+${domainNote ? `\n${domainNote}\n` : ''}
+Here are the candidate puzzle paths:
+
+${candidateList}
+
+## Step 1: Validity check
+For each candidate, evaluate whether every hop is valid and knowable at ${difficulty} difficulty.
+Flag issues: wrong_domain, obscure, too_easy, abstract, ambiguous.
+A candidate FAILS validity if: any hop is wrong_domain, any hop scores below 4, or overall score < 7.
+(For hard: also fail if overall score >= 9 — too easy for hard.)
+
+## Step 2: Story quality
+For each candidate that PASSES validity, rate story quality 1-10:
+- 9-10: Surprising and delightful — reveals something non-obvious, feels like a discovery
+- 7-8: Interesting journey — connection makes sense once you see it, "aha" moment
+- 5-6: Functional — valid but arbitrary, no memorable arc
+- 1-4: Boring — obvious hubs, no narrative tension
+
+The best story feels like a journey: starts familiar, travels through unexpected territory, arrives somewhere surprising.
+
+## Step 3: Select winner and write narrative
+Pick the candidate with the highest story score (among those passing validity).
+Write a 2-3 sentence narrative for the winner in the style of RabbitHole: engaging, explains WHY each connection makes sense like a curious fact trail, enthusiastic but concise, flowing prose (no bullet points).
+
+Respond with JSON only:
+{
+  "candidates": [
+    {
+      "index": 0,
+      "validity_pass": true,
+      "overall_score": 8,
+      "story_score": 7,
+      "issues": ["Node → Node: too_easy (6/10)"]
+    }
+  ],
+  "winner_index": 0,
+  "narrative": "2-3 sentence narrative for the winner...",
+  "verdict": "one sentence explaining why this path tells the best story"
+}`
+
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o',
+    max_tokens: 1500,
+    messages: [{ role: 'user', content: prompt }],
+  })
+
+  const text = response.choices[0]?.message?.content ?? ''
+  const jsonMatch = text.match(/\{[\s\S]*\}/)
+  if (!jsonMatch) throw new Error(`No JSON in evaluateAndSelectPuzzle response: ${text.slice(0, 200)}`)
+
+  const parsed = JSON.parse(jsonMatch[0])
+
+  // Find winner
+  const winnerIdx: number = parsed.winner_index ?? 0
+  const winnerData = parsed.candidates?.[winnerIdx]
+
+  if (!winnerData) return null
+
+  const issues: string[] = (winnerData.issues ?? [])
+  const storyScores: number[] = (parsed.candidates ?? []).map((c: any) => c.story_score ?? 0)
+
+  // Build QCResult for winner
+  const hasWrongDomain = issues.some((i: string) => i.includes('wrong_domain'))
+  const minHopScore = issues.length > 0
+    ? Math.min(...issues.map((i: string) => {
+        const m = i.match(/\((\d+)\/10\)/)
+        return m ? parseInt(m[1]) : 10
+      }))
+    : 10
+  const score = winnerData.overall_score ?? 7
+  const pass = !hasWrongDomain && score >= 7 && minHopScore >= 4 && !(difficulty === 'hard' && score >= 9)
+
+  return {
+    winnerIndex: winnerIdx,
+    narrative: parsed.narrative ?? '',
+    storyScores,
+    qcResult: {
+      pass,
+      score,
+      issues,
+      verdict: parsed.verdict ?? '',
+    },
   }
 }
 
