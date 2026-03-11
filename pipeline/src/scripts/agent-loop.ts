@@ -118,6 +118,7 @@ function updateDomainConfig(overrides: DomainOverrides): void {
 interface DiagnoseResult {
   overrides: DomainOverrides
   forceRefresh: boolean
+  structural?: boolean  // graph shape is the problem — SPARQL subqueries need new edge types
 }
 
 // Diagnose failures and return suggested override adjustments + whether to force-refresh entities
@@ -158,13 +159,19 @@ function diagnose(results: RoundResult[], currentOverrides: DomainOverrides): Di
       console.log(`  [diagnose] No puzzle produced — lowering hubThreshold to ${next.hubRelatedIdsThreshold}`)
       return { overrides: next, forceRefresh: false }
     }
-    // Finally loosen quality and hub ratio
+    // Loosen quality and hub ratio
     const cur = next.minQualityScore ?? 40
-    next.minQualityScore = Math.max(10, cur - 10)
-    const curHub = next.maxHubRatio ?? 0.0
-    next.maxHubRatio = Math.min(0.8, curHub + 0.2)
-    console.log(`  [diagnose] No puzzle produced — loosening quality floor to ${next.minQualityScore}, hubRatio to ${next.maxHubRatio}`)
-    return { overrides: next, forceRefresh: false }
+    if (cur > 10) {
+      next.minQualityScore = Math.max(10, cur - 10)
+      const curHub = next.maxHubRatio ?? 0.0
+      next.maxHubRatio = Math.min(0.8, curHub + 0.2)
+      console.log(`  [diagnose] No puzzle produced — loosening quality floor to ${next.minQualityScore}, hubRatio to ${next.maxHubRatio}`)
+      return { overrides: next, forceRefresh: false }
+    }
+    // All levers maxed — graph is structurally unable to produce paths at this difficulty.
+    // No config change will fix this; the SPARQL subqueries need new edge types.
+    console.log(`  [diagnose] STRUCTURAL FAILURE — all config levers exhausted, graph shape insufficient for ${domain} easy/medium. Add more SPARQL subquery types to wikidata.ts.`)
+    return { overrides: next, forceRefresh: false, structural: true }
   }
 
   // Check for "abstract" issues — intermediates are too generic
@@ -209,6 +216,7 @@ async function run() {
   let round = 0
   let nextForceRefresh = false  // escalate to force-refresh when diagnosis requests it
   let stuckCount = 0  // rounds with no config change and no improvement
+  let structuralFailure = false  // graph shape can't produce paths — needs SPARQL fix
 
   while (round < MAX_ROUNDS) {
     round++
@@ -262,7 +270,13 @@ async function run() {
       console.log('  No further adjustments possible.')
       stuckCount++
     } else {
-      const { overrides: suggested, forceRefresh: shouldRefresh } = diagnosis
+      const { overrides: suggested, forceRefresh: shouldRefresh, structural } = diagnosis
+
+      if (structural) {
+        structuralFailure = true
+        console.log('  Stopping retries — structural graph failure, no config fix possible.')
+        break
+      }
 
       if (shouldRefresh) nextForceRefresh = true
 
@@ -290,9 +304,14 @@ async function run() {
   // Final report
   const allResults = Array.from(bestResults.values())
   const finalPassing = allResults.filter(r => r.pass).length
+  const status = finalPassing === 3 ? 'success' : structuralFailure ? 'structural_failure' : 'partial'
+  if (structuralFailure) {
+    const missingDifficulties = ['easy', 'medium', 'hard'].filter(d => !bestResults.has(d))
+    console.log(`\n⚠ STRUCTURAL FAILURE for ${domain}: ${missingDifficulties.join(', ')} need new SPARQL subquery edge types in wikidata.ts`)
+  }
   console.log(`\nFINAL ${JSON.stringify({
     domain,
-    status: finalPassing === 3 ? 'success' : 'partial',
+    status,
     rounds: round,
     results: allResults,
   })}`)
