@@ -34,4 +34,29 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
   ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 5)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'plays as'),
+  // Player → college / educated at (easy: Alabama, Ohio State, Notre Dame, Michigan — college football is huge, fans know alma maters)
+  sq('easy', ['person', 'other'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q19204627; wdt:P69 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 10)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 30)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'played college ball at'),
+  // Player/Team → Super Bowl (medium: Super Bowl is the most watched event in US sports — connects teams and players)
+  sq('medium', ['team', 'other'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?b wdt:P31 wd:Q682920; wdt:P1923 ?a.
+  ?a wdt:P31 wd:Q17156793.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 15)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 20)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'participated in'),
+  // Player → award received (medium: Super Bowl MVP, NFL MVP, Heisman Trophy — well-known awards)
+  sq('medium', ['person', 'other'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  VALUES ?b { wd:Q1421853 wd:Q1361287 wd:Q1361295 wd:Q902463 wd:Q1361276 }
+  ?a wdt:P31 wd:Q5; wdt:P166 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 10)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'awarded'),
 ]
