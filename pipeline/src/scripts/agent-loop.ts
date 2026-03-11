@@ -88,17 +88,26 @@ function runDryRun(extraArgs = '', forceRefresh = false): RoundResult[] {
   return results
 }
 
-// Run the final publish pass (no --dry-run)
-function runPublish(): void {
+// Run the final publish pass (no --dry-run), return parsed results
+function runPublish(): RoundResult[] {
   const refreshFlag = FORCE_REFRESH ? '--refresh-cache' : ''
   const cmd = `npx ts-node ${SCRIPT_DIR}/run-domain.ts --domain ${domain} --date ${date} ${refreshFlag}`
   console.log(`\n  $ ${cmd.trim()}`)
+  let output = ''
   try {
-    const output = execSync(cmd, { cwd: path.join(__dirname, '../../'), encoding: 'utf8', stdio: 'pipe' })
+    output = execSync(cmd, { cwd: path.join(__dirname, '../../'), encoding: 'utf8', stdio: 'pipe' })
     console.log(output.split('\n').map(l => '  ' + l).join('\n'))
   } catch (e: any) {
-    console.log(((e.stdout ?? '') + (e.stderr ?? '')).split('\n').map((l: string) => '  ' + l).join('\n'))
+    output = (e.stdout ?? '') + (e.stderr ?? '')
+    console.log(output.split('\n').map((l: string) => '  ' + l).join('\n'))
   }
+  const results: RoundResult[] = []
+  for (const line of output.split('\n')) {
+    if (line.startsWith('RESULT ')) {
+      try { results.push(JSON.parse(line.slice(7))) } catch {}
+    }
+  }
+  return results
 }
 
 function updateDomainConfig(overrides: DomainOverrides): void {
@@ -211,17 +220,27 @@ async function run() {
     // Publish any newly passing difficulties immediately so we don't lose them
     if (passing > 0) {
       console.log(`\n  Publishing ${passing} passing difficult${passing === 1 ? 'y' : 'ies'}...`)
-      runPublish()
+      const publishResults = runPublish()
+      // Merge publish results into bestResults (catches already-published skips)
+      for (const r of publishResults) {
+        if (r.pass) {
+          const existing = bestResults.get(r.difficulty)
+          if (!existing || r.score > existing.score) {
+            bestResults.set(r.difficulty, r)
+          }
+        }
+      }
     }
 
     // Success condition: all 3 difficulties have passed (across all rounds)
-    if (totalPassed === 3) {
+    if (bestResults.size === 3) {
       console.log(`\n✓ All 3 difficulties pass for ${domain}!`)
       console.log(`\nFINAL ${JSON.stringify({ domain, status: 'success', rounds: round, results: Array.from(bestResults.values()) })}`)
       process.exit(0)
     }
 
-    // Diagnose failures using this round's results
+    // Diagnose failures using this round's results (skip if all 3 now in bestResults)
+    if (bestResults.size === 3) break
     const diagnosis = diagnose(lastResults, currentOverrides)
     if (!diagnosis) {
       console.log('  No further adjustments possible.')
