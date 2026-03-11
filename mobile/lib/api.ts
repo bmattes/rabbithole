@@ -10,6 +10,7 @@ export interface Puzzle {
   bubbles: Array<{ id: string; label: string; position: { x: number; y: number } }>
   connections: Record<string, string[]>
   optimal_path: string[]
+  alternative_paths: string[][] | null
   narrative: string | null
   difficulty?: 'easy' | 'medium' | 'hard'
   domain?: string
