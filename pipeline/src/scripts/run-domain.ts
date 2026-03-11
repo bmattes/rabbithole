@@ -122,9 +122,18 @@ const UNGUESSABLE_TYPES = new Set(['office', 'field', 'category'])
 // Country nodes are valid bridges for food (Italy→pizza, Japan→sushi) — no domain stripping needed
 const FOOD_UNGUESSABLE_TYPES = new Set(['office', 'field', 'category', 'country'])
 const COUNTRY_STRIP_DOMAINS = new Set<string>([])
+// Domains where 'field' nodes are valid bridges (literary movements, art movements, etc.)
+const FIELD_BRIDGE_DOMAINS = new Set(['literature', 'art'])
 
 function filterEntities(entities: any[], domainName?: string): any[] {
-  const types = (domainName && COUNTRY_STRIP_DOMAINS.has(domainName)) ? FOOD_UNGUESSABLE_TYPES : UNGUESSABLE_TYPES
+  let types: Set<string>
+  if (domainName && COUNTRY_STRIP_DOMAINS.has(domainName)) {
+    types = FOOD_UNGUESSABLE_TYPES
+  } else if (domainName && FIELD_BRIDGE_DOMAINS.has(domainName)) {
+    types = new Set(['office', 'category'])  // keep 'field' for literature/art — literary/art movements are valid bridges
+  } else {
+    types = UNGUESSABLE_TYPES
+  }
   const isBad = (e: any) => types.has(e.entityType) || /^Q\d+$/.test(e.label ?? '')
   const badIds = new Set(entities.filter(isBad).map((e: any) => e.id))
   if (badIds.size === 0) return entities
