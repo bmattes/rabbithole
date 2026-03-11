@@ -23,6 +23,8 @@ export interface ComposedPuzzle {
   connections: Record<string, string[]>
   optimalPath: string[]
   difficulty: Difficulty
+  /** Valid paths longer than optimalPath — present on Hard difficulty when multi-path is possible */
+  alternativePaths?: string[][]
 }
 
 function shuffle<T>(arr: T[]): T[] {
@@ -259,6 +261,44 @@ function selectBranchDistractors(
     .map(e => e.id)
 }
 
+/**
+ * Find all simple paths from startId to endId in the given graph whose length
+ * (in nodes) is between optimalLength+1 and optimalLength+maxExtra (inclusive).
+ * Returns at most `cap` alternative paths to keep runtime bounded.
+ */
+function findAlternativePaths(
+  startId: string,
+  endId: string,
+  graph: Graph,
+  optimalLength: number,
+  maxExtra = 2,
+  cap = 10,
+): string[][] {
+  const maxLength = optimalLength + maxExtra
+  const results: string[][] = []
+
+  const dfs = (current: string, path: string[]) => {
+    if (results.length >= cap) return
+    if (current === endId) {
+      if (path.length > optimalLength) {
+        results.push([...path])
+      }
+      return
+    }
+    if (path.length >= maxLength) return
+    for (const neighbor of graph[current] ?? []) {
+      if (!path.includes(neighbor)) {
+        path.push(neighbor)
+        dfs(neighbor, path)
+        path.pop()
+      }
+    }
+  }
+
+  dfs(startId, [startId])
+  return results
+}
+
 export function composePuzzle({
   entities,
   graph,
@@ -278,7 +318,7 @@ export function composePuzzle({
   params?: CompositionParams
   domainOverrides?: DomainOverrides
   intermediateFilterConfig?: IntermediateFilterConfig
-  distractorMode?: 'easy' | 'medium'
+  distractorMode?: 'easy' | 'medium' | 'hard'
 }): ComposedPuzzle | null {
   const effectiveMinQuality = domainOverrides?.minQualityScore ?? MIN_QUALITY_SCORE
   const effectiveMaxHubRatio = domainOverrides?.maxHubRatio ?? MAX_HUB_RATIO
@@ -372,6 +412,39 @@ export function composePuzzle({
       ...optimalPath.slice(1, -1),
       ...distractors.slice(0, distractorCount),
     ]
+  } else if (distractorMode === 'hard') {
+    // Hard: include nodes from all alternate paths (up to optimalLength+2 hops),
+    // then fill remaining slots with branch distractors or isolated nodes.
+    const altPaths = findAlternativePaths(startId, endId, graph, optimalPath.length, 2, 10)
+    const altPathNodeIds = new Set<string>()
+    for (const altPath of altPaths) {
+      for (const id of altPath) {
+        if (id !== startId && id !== endId) altPathNodeIds.add(id)
+      }
+    }
+    // Collect all path nodes (optimal + alt) that have good labels
+    const allPathNodeIds = new Set([...pathIds, ...altPathNodeIds])
+    const altNodes = [...altPathNodeIds].filter(hasGoodLabel)
+
+    // Fill remaining slots after optimal path + alt path nodes
+    const slotsAfterPaths = targetBubbleCount - optimalPath.length - altNodes.length
+    const filler = slotsAfterPaths > 0
+      ? selectBranchDistractors(allPathNodeIds, entities, graph, slotsAfterPaths)
+          .filter(hasGoodLabel)
+          .slice(0, slotsAfterPaths)
+      : []
+    // Any filler that connects to >1 path node — zero them (shouldn't happen, but guard)
+    filler.forEach(id => {
+      const neighbors = new Set(graph[id] ?? [])
+      const connections = [...allPathNodeIds].filter(pid => neighbors.has(pid))
+      if (connections.length === 0) zeroConnectionIds.add(id)
+    })
+
+    middleIds = [
+      ...optimalPath.slice(1, -1),
+      ...altNodes,
+      ...filler,
+    ]
   } else {
     // Default (no distractorMode): original neighbor-expansion + orphan behavior
     // When the path is short (3 hops), skip adding neighbors of start/end to the
@@ -434,7 +507,13 @@ export function composePuzzle({
   const qualityScore = scorePathQuality(trueOptimalPath, entityMap, trimmedGraph, effectiveHubThreshold)
   if (qualityScore.total < effectiveMinQuality) return null
 
-  return { startId, endId, bubbles, connections, optimalPath: trueOptimalPath, difficulty }
+  // For hard mode: find alternative paths in the trimmed bubble graph
+  // (these are longer routes the player can discover as non-optimal solutions)
+  const alternativePaths = distractorMode === 'hard'
+    ? findAlternativePaths(startId, endId, trimmedGraph, trueOptimalPath.length, 2, 10)
+    : undefined
+
+  return { startId, endId, bubbles, connections, optimalPath: trueOptimalPath, difficulty, alternativePaths }
 }
 
 // Hop range (inclusive) that can plausibly produce each difficulty after trimming.
@@ -546,7 +625,7 @@ export function composePuzzleForDifficulty({
         if (startId === endId) continue
       }
 
-      const puzzle = composePuzzle({ entities, graph, startId, endId, targetBubbleCount, params: round.params, domainOverrides, intermediateFilterConfig, distractorMode: targetDifficulty === 'hard' ? undefined : targetDifficulty })
+      const puzzle = composePuzzle({ entities, graph, startId, endId, targetBubbleCount, params: round.params, domainOverrides, intermediateFilterConfig, distractorMode: targetDifficulty })
       if (puzzle && puzzle.difficulty === targetDifficulty) {
         const entityMap = new Map(entities.map(e => [e.id, e]))
         const score = scorePathQuality(puzzle.optimalPath, entityMap, puzzle.connections as Graph, effectiveHubThreshold)

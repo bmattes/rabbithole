@@ -1,5 +1,5 @@
 import { composePuzzle } from '../puzzleComposer'
-import { buildGraph, Entity } from '../graphBuilder'
+import { buildGraph, Entity, Graph } from '../graphBuilder'
 
 const entities: Entity[] = [
   { id: 'Q1', label: 'The Godfather', relatedIds: ['Q2', 'Q3'] },
@@ -118,6 +118,109 @@ describe('Medium branch distractors', () => {
       const neighbors = graph[bubble.id] ?? []
       const pathConnections = neighbors.filter(n => pathIds.has(n))
       expect(pathConnections.length).toBeLessThanOrEqual(1)
+    }
+  })
+})
+
+// --- Multi-path graph for Hard tests ---
+// Optimal path:  Q1 → Q2 → Q3 → Q4 → Q5 → Q6  (5 hops)
+// Alt path A:    Q1 → Q2 → Q7 → Q8 → Q5 → Q6  (5 hops — same length, different intermediates)
+// Alt path B:    Q1 → Q2 → Q3 → Q4 → Q9 → Q6  (5 hops — diverges at Q4)
+// Isolated distractors: Q10–Q14
+const multiPathEntities: Entity[] = [
+  { id: 'Q1',  label: 'Start Node',   relatedIds: ['Q2'] },
+  { id: 'Q2',  label: 'Hub Node',     relatedIds: ['Q1', 'Q3', 'Q7'] },
+  { id: 'Q3',  label: 'Mid A',        relatedIds: ['Q2', 'Q4'] },
+  { id: 'Q4',  label: 'Mid B',        relatedIds: ['Q3', 'Q5', 'Q9'] },
+  { id: 'Q5',  label: 'Pre End',      relatedIds: ['Q4', 'Q6', 'Q8'] },
+  { id: 'Q6',  label: 'End Node',     relatedIds: ['Q5', 'Q9'] },
+  { id: 'Q7',  label: 'Alt Mid One',  relatedIds: ['Q2', 'Q8'] },
+  { id: 'Q8',  label: 'Alt Mid Two',  relatedIds: ['Q7', 'Q5'] },
+  { id: 'Q9',  label: 'Alt Pre End',  relatedIds: ['Q4', 'Q6'] },
+  { id: 'Q10', label: 'Island One',   relatedIds: [] },
+  { id: 'Q11', label: 'Island Two',   relatedIds: [] },
+  { id: 'Q12', label: 'Island Three', relatedIds: [] },
+  { id: 'Q13', label: 'Island Four',  relatedIds: [] },
+  { id: 'Q14', label: 'Island Five',  relatedIds: [] },
+]
+
+/**
+ * Count all simple paths from start to end in the connections graph
+ * within a hop budget (inclusive). Used to verify multi-path puzzles.
+ */
+function countAllPaths(
+  startId: string,
+  endId: string,
+  connections: Graph,
+  maxHops = 10,
+): number {
+  let count = 0
+  const dfs = (current: string, visited: Set<string>, hops: number) => {
+    if (current === endId) { count++; return }
+    if (hops >= maxHops) return
+    for (const neighbor of connections[current] ?? []) {
+      if (!visited.has(neighbor)) {
+        visited.add(neighbor)
+        dfs(neighbor, visited, hops + 1)
+        visited.delete(neighbor)
+      }
+    }
+  }
+  const visited = new Set<string>([startId])
+  dfs(startId, visited, 0)
+  return count
+}
+
+describe('Hard multi-path puzzles', () => {
+  it('hard puzzle has at least 2 valid complete paths in the bubble subgraph', () => {
+    const graph = buildGraph(multiPathEntities)
+    const puzzle = composePuzzle({
+      entities: multiPathEntities,
+      graph,
+      startId: 'Q1',
+      endId: 'Q6',
+      params: { minPathLength: 5, obscureThreshold: 0 },
+      domainOverrides: testOverrides,
+      distractorMode: 'hard',
+    })
+    expect(puzzle).not.toBeNull()
+    const pathCount = countAllPaths(puzzle!.startId, puzzle!.endId, puzzle!.connections)
+    expect(pathCount).toBeGreaterThanOrEqual(2)
+  })
+
+  it('hard puzzle exposes alternativePaths field with at least one entry', () => {
+    const graph = buildGraph(multiPathEntities)
+    const puzzle = composePuzzle({
+      entities: multiPathEntities,
+      graph,
+      startId: 'Q1',
+      endId: 'Q6',
+      params: { minPathLength: 5, obscureThreshold: 0 },
+      domainOverrides: testOverrides,
+      distractorMode: 'hard',
+    })
+    expect(puzzle).not.toBeNull()
+    expect(puzzle!.alternativePaths).toBeDefined()
+    expect(puzzle!.alternativePaths!.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('all nodes from alternativePaths are present as bubbles', () => {
+    const graph = buildGraph(multiPathEntities)
+    const puzzle = composePuzzle({
+      entities: multiPathEntities,
+      graph,
+      startId: 'Q1',
+      endId: 'Q6',
+      params: { minPathLength: 5, obscureThreshold: 0 },
+      domainOverrides: testOverrides,
+      distractorMode: 'hard',
+    })
+    expect(puzzle).not.toBeNull()
+    const bubbleIds = new Set(puzzle!.bubbles.map(b => b.id))
+    for (const altPath of puzzle!.alternativePaths ?? []) {
+      for (const nodeId of altPath) {
+        expect(bubbleIds).toContain(nodeId)
+      }
     }
   })
 })
