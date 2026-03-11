@@ -143,10 +143,26 @@ function diagnose(results: RoundResult[], currentOverrides: DomainOverrides): Di
 
   // If puzzles aren't composing at all — graph too sparse after filtering
   if (missing > 0 || results.length === 0) {
+    // First: zero out anchor familiarity floor — non-person anchors (dishes, books, soldiers)
+    // are rarely Wikipedia-famous enough to pass default MIN_ANCHOR_FAMILIARITY (easy=40, medium=20)
+    const curFamiliarity = next.minAnchorFamiliarity ?? 20  // treat undefined as non-zero default
+    if (curFamiliarity > 0) {
+      next.minAnchorFamiliarity = 0
+      console.log(`  [diagnose] No puzzle produced — zeroing minAnchorFamiliarity (was ${curFamiliarity})`)
+      return { overrides: next, forceRefresh: false }
+    }
+    // Also lower hub threshold so conflict/event nodes can serve as intermediates
+    const curThreshold = next.hubRelatedIdsThreshold ?? 50
+    if (curThreshold > 20) {
+      next.hubRelatedIdsThreshold = Math.max(20, curThreshold - 20)
+      console.log(`  [diagnose] No puzzle produced — lowering hubThreshold to ${next.hubRelatedIdsThreshold}`)
+      return { overrides: next, forceRefresh: false }
+    }
+    // Finally loosen quality and hub ratio
     const cur = next.minQualityScore ?? 40
     next.minQualityScore = Math.max(10, cur - 10)
     const curHub = next.maxHubRatio ?? 0.0
-    next.maxHubRatio = Math.min(0.5, curHub + 0.15)
+    next.maxHubRatio = Math.min(0.8, curHub + 0.2)
     console.log(`  [diagnose] No puzzle produced — loosening quality floor to ${next.minQualityScore}, hubRatio to ${next.maxHubRatio}`)
     return { overrides: next, forceRefresh: false }
   }
