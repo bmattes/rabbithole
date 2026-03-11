@@ -53,4 +53,39 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
   ?a wikibase:sitelinks ?links. FILTER(?links > 30)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'won award'),
+  // Film → genre (easy: Action, Comedy, Drama, Horror, Sci-Fi — every casual viewer knows genres)
+  sq('easy', ['film', 'other'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?a wdt:P31 wd:Q11424; wdt:P136 ?b.
+  ?b wdt:P31 wd:Q201658.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 30)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 50)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'genre'),
+  // Film → award received (medium: Oscar, BAFTA, Cannes Palme d'Or — well-known film awards)
+  sq('medium', ['film', 'other'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  VALUES ?b { wd:Q102427 wd:Q19020 wd:Q41417 wd:Q44584 wd:Q44585 wd:Q28943867 wd:Q106291 }
+  ?a wdt:P31 wd:Q11424; wdt:P166 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 25)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'won award'),
+  // Film → narrative setting / set in (medium: films set in Paris, New York, London, Tokyo — players recognise famous settings)
+  sq('medium', ['film', 'other'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?a wdt:P31 wd:Q11424; wdt:P840 ?b.
+  ?b wdt:P31 wd:Q515.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 25)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 40)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'set in'),
+  // Film → filming location (hard: actual shoot location differs from narrative setting — niche knowledge)
+  sq('hard', ['film', 'other'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?a wdt:P31 wd:Q11424; wdt:P915 ?b.
+  ?b wdt:P31 wd:Q515.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 25)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 30)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'filmed in'),
 ]

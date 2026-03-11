@@ -36,4 +36,38 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
   ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 20)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'educated at'),
+  // Commander → place of birth (easy: birthplaces like France, Virginia, Prussia connect commanders across eras)
+  sq('easy', ['person', 'other'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q189290; wdt:P19 ?b.
+  ?b wdt:P31 wd:Q515.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 15)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 30)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'born in'),
+  // Commander → country of citizenship (easy: nationality connects commanders — American, British, German, French commanders)
+  sq('easy', ['person', 'other'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q189290; wdt:P27 ?b.
+  ?b wdt:P31 wd:Q6256.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 15)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 50)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'from'),
+  // Commander → military branch (medium: Army, Navy, Air Force, Marines — branch connects many commanders)
+  sq('medium', ['person', 'other'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  VALUES ?b { wd:Q8733 wd:Q11220 wd:Q11230 wd:Q9202 wd:Q9615 wd:Q649 wd:Q178561 wd:Q189155 wd:Q379924 wd:Q178505 }
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q189290; wdt:P241 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 10)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'served in'),
+  // Commander → notable award — major recognisable awards (medium: Medal of Honor, Victoria Cross, Legion of Honour — knowable by casual players)
+  sq('medium', ['person', 'other'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  VALUES ?b { wd:Q21669 wd:Q1267319 wd:Q163700 wd:Q193714 wd:Q152037 wd:Q185715 }
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q189290; wdt:P166 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 10)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'awarded'),
 ]

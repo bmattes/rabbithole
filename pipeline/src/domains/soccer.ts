@@ -43,4 +43,30 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
   ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 20)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'managed by'),
+  // Player → award received (easy: Ballon d'Or, FIFA Best, Golden Boot — every casual soccer fan knows these)
+  sq('easy', ['person', 'other'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  VALUES ?b { wd:Q170022 wd:Q1356490 wd:Q1369908 wd:Q876371 wd:Q1221592 wd:Q1365160 }
+  ?a wdt:P31 wd:Q5; wdt:P166 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 20)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'awarded'),
+  // Player → place of birth (medium: birthplace cities connect players — São Paulo, Buenos Aires, Lagos, Madrid)
+  sq('medium', ['person', 'other'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q937857; wdt:P19 ?b.
+  ?b wdt:P31 wd:Q515.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 20)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 30)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'born in'),
+  // Team → manager / head coach (medium: Guardiola, Mourinho, Klopp managed multiple clubs — bridges teams)
+  sq('medium', ['team', 'person'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?a wdt:P31 wd:Q476028; wdt:P286 ?b.
+  ?b wdt:P31 wd:Q5.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 20)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 25)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'managed by'),
 ]

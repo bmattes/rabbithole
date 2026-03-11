@@ -53,4 +53,31 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
   ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 10)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'created by'),
+  // Dish → country of origin (easy: Sushi→Japan, Pizza→Italy, Tacos→Mexico — very recognisable to casual players)
+  sq('easy', ['dish', 'other'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?a wdt:P31 wd:Q746549; wdt:P495 ?b.
+  ?b wdt:P31 wd:Q6256.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 10)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 50)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'originates from'),
+  // Ingredient → country of origin (easy: ingredients also have national origins — connects to same country hubs)
+  sq('easy', ['ingredient', 'other'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  { ?a wdt:P31 wd:Q25403900. } UNION { ?a wdt:P31 wd:Q10675206. } UNION { ?a wdt:P31 wd:Q207123. }
+  ?a wdt:P495 ?b.
+  ?b wdt:P31 wd:Q6256.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 5)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 50)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'originates from'),
+  // Dish → culinary tradition / cuisine (medium: Italian cuisine, French cuisine, Japanese cuisine — bridges dishes culturally)
+  sq('medium', ['dish', 'other'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?a wdt:P31 wd:Q746549; wdt:P2012 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 8)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 20)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'part of cuisine'),
 ]

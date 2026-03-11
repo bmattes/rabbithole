@@ -94,4 +94,20 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
   ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 10)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'flew on mission'),
+  // Astronaut → educated at (easy: MIT, Caltech, USAF Academy, Naval Academy, West Point — recognisable to casual players)
+  sq('easy', ['person', 'other'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q11631; wdt:P69 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 10)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 40)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'educated at'),
+  // Astronaut → award received (medium: Congressional Space Medal of Honor, NASA Distinguished Service Medal — space achievement awards)
+  sq('medium', ['person', 'other'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  VALUES ?b { wd:Q1053285 wd:Q1054074 wd:Q21669 wd:Q131226 wd:Q193714 wd:Q185715 }
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q11631; wdt:P166 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 8)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'awarded'),
 ]

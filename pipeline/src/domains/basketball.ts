@@ -44,4 +44,29 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
   ?a wikibase:sitelinks ?links. FILTER(?links > 20)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'received award'),
+  // Player → college (easy: Duke, Kentucky, UCLA, UNC — basketball fans know college connections well)
+  sq('easy', ['person', 'other'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q3665646; wdt:P69 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 15)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 30)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'played college ball at'),
+  // Player → award received (medium: NBA MVP, Finals MVP, Rookie of the Year, All-Star)
+  sq('medium', ['person', 'other'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  VALUES ?b { wd:Q219730 wd:Q1411146 wd:Q853153 wd:Q1454433 wd:Q2622472 wd:Q1300642 wd:Q219888 }
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q3665646; wdt:P166 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 15)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'awarded'),
+  // Player → place of birth (medium: birthplace cities — Akron, Brooklyn, Chicago, Philadelphia)
+  sq('medium', ['person', 'other'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q3665646; wdt:P19 ?b.
+  ?b wdt:P31 wd:Q515.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 15)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 25)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'born in'),
 ]

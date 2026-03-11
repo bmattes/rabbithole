@@ -51,4 +51,30 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
   ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 20)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'belongs to genre'),
+  // Author → country of citizenship (easy: nationality connects authors — British, French, American, Russian writers)
+  sq('easy', ['person', 'other'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q36180; wdt:P27 ?b.
+  ?b wdt:P31 wd:Q6256.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 20)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 50)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'from'),
+  // Author → award received (medium: Nobel Prize in Literature, Booker Prize, Pulitzer — recognisable by casual readers)
+  sq('medium', ['person', 'other'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  VALUES ?b { wd:Q37922 wd:Q160082 wd:Q44585 wd:Q166552 wd:Q35637 wd:Q131539 wd:Q179131 }
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q36180; wdt:P166 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 15)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'received award'),
+  // Author → place of birth (medium: birthplace cities/countries connect authors across eras — Paris, London, New York, St Petersburg)
+  sq('medium', ['person', 'other'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q36180; wdt:P19 ?b.
+  ?b wdt:P31 wd:Q515.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 20)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 30)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'born in'),
 ]

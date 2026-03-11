@@ -63,4 +63,32 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
   ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 5)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'part of movement'),
+  // Comics creator → influenced by (easy: creative lineage — Jack Kirby influenced by Alex Raymond, Neal Adams influenced by Gil Kane — fans know this)
+  sq('easy', ['person', 'person'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P737 ?b.
+  ?b wdt:P31 wd:Q5.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 15)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 15)
+  { ?a wdt:P106 wd:Q1734662. } UNION { ?a wdt:P106 wd:Q715301. } UNION { ?a wdt:P106 wd:Q266569. }
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'influenced by'),
+  // Comics creator → award received (medium: Eisner Award, Harvey Award, Hugo Award — comics industry awards)
+  sq('medium', ['person', 'other'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  VALUES ?b { wd:Q1047285 wd:Q1291735 wd:Q44585 wd:Q185715 wd:Q1377075 }
+  ?a wdt:P31 wd:Q5; wdt:P166 ?b.
+  { ?a wdt:P106 wd:Q1734662. } UNION { ?a wdt:P106 wd:Q715301. } UNION { ?a wdt:P106 wd:Q266569. }
+  ?a wikibase:sitelinks ?links. FILTER(?links > 10)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'received award'),
+  // Comics creator → movement/style (medium: Silver Age, Golden Age, underground comix — connects creators across publishers)
+  sq('medium', ['person', 'other'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P135 ?b.
+  { ?a wdt:P106 wd:Q1734662. } UNION { ?a wdt:P106 wd:Q715301. } UNION { ?a wdt:P106 wd:Q266569. }
+  ?a wikibase:sitelinks ?links. FILTER(?links > 10)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 10)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'part of movement'),
 ]

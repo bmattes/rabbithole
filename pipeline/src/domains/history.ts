@@ -40,6 +40,22 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
   ?a wikibase:sitelinks ?links. FILTER(?links > 20)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'aligned with'),
+  // Historical figure → educated at (medium: Oxford, Cambridge, Harvard, Sorbonne — recognisable elite institutions)
+  sq('medium', ['person', 'other'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P69 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 35)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 50)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'educated at'),
+  // Historical figure → award received (medium: Nobel Peace Prize, Presidential Medal of Freedom — cross-era recognition)
+  sq('medium', ['person', 'other'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  VALUES ?b { wd:Q35637 wd:Q131226 wd:Q7191 wd:Q170483 wd:Q131539 wd:Q2747062 wd:Q131604 }
+  ?a wdt:P31 wd:Q5; wdt:P166 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 30)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'received award'),
   // Historical figure → alma mater (hard: Oxford/Cambridge/Harvard connections across eras)
   sq('hard', ['person', 'other'], (limit) => `
 SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {

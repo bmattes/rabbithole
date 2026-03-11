@@ -57,4 +57,33 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
   ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 20)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'trained at'),
+  // Artist → influenced by (medium: Van Gogh influenced by Millet, Picasso influenced by Cézanne — art history connections)
+  sq('medium', ['person', 'person'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P737 ?b.
+  ?b wdt:P31 wd:Q5.
+  { ?a wdt:P106 wd:Q1028181. } UNION { ?a wdt:P106 wd:Q1281618. } UNION { ?a wdt:P106 wd:Q15296811. }
+  ?a wikibase:sitelinks ?links. FILTER(?links > 20)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 20)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'influenced by'),
+  // Artist → place of birth (medium: birthplace cities — Florence, Amsterdam, Paris, Madrid connect artists across eras)
+  sq('medium', ['person', 'other'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?a wdt:P31 wd:Q5; wdt:P19 ?b.
+  ?b wdt:P31 wd:Q515.
+  { ?a wdt:P106 wd:Q1028181. } UNION { ?a wdt:P106 wd:Q1281618. } UNION { ?a wdt:P106 wd:Q15296811. }
+  ?a wikibase:sitelinks ?links. FILTER(?links > 20)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 30)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'born in'),
+  // Artist → award received (hard: Turner Prize, Praemium Imperiale, Golden Lion — niche art world awards)
+  sq('hard', ['person', 'other'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
+  VALUES ?b { wd:Q202526 wd:Q1316551 wd:Q493765 wd:Q1377075 wd:Q3177212 }
+  ?a wdt:P31 wd:Q5; wdt:P166 ?b.
+  { ?a wdt:P106 wd:Q1028181. } UNION { ?a wdt:P106 wd:Q1281618. } UNION { ?a wdt:P106 wd:Q15296811. }
+  ?a wikibase:sitelinks ?links. FILTER(?links > 15)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'received award'),
 ]

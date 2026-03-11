@@ -57,4 +57,31 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
   ?a wikibase:sitelinks ?links.
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?blinks) LIMIT 100`, 'filming location of'),
+  // City → narrative setting (medium: cities that appear as settings in famous films — Paris in Midnight in Paris, NYC in countless films)
+  sq('medium', ['city', 'film'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?b wdt:P31 wd:Q11424; wdt:P840 ?a.
+  ?a wdt:P31 wd:Q515.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 40)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 40)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?blinks) LIMIT ${limit}`, 'setting of'),
+  // City → filming location (medium: cities used as filming locations for famous films)
+  sq('medium', ['city', 'film'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?b wdt:P31 wd:Q11424; wdt:P915 ?a.
+  ?a wdt:P31 wd:Q515.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 40)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 40)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?blinks) LIMIT ${limit}`, 'filming location for'),
+  // City → notable person born there (hard: famous birthplaces — Einstein born in Ulm, Napoleon born in Ajaccio)
+  sq('hard', ['city', 'person'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?b wdt:P31 wd:Q5; wdt:P19 ?a.
+  ?a wdt:P31 wd:Q515.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 40)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 60)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?blinks) LIMIT ${limit}`, 'birthplace of'),
 ]
