@@ -218,6 +218,47 @@ export function scorePathQuality(
   return { total, anchorFamiliarity, intermediateBalance, surpriseFactor, hubPenalty }
 }
 
+function selectIsolatedDistractors(
+  pathIds: Set<string>,
+  entities: Entity[],
+  graph: Graph,
+  count: number,
+): string[] {
+  return shuffle(
+    entities
+      .filter(e => !pathIds.has(e.id))
+      .filter(e => {
+        const neighbors = new Set(graph[e.id] ?? [])
+        for (const pid of pathIds) {
+          if (neighbors.has(pid)) return false
+          if ((graph[pid] ?? []).includes(e.id)) return false
+        }
+        return true
+      })
+  )
+    .slice(0, count)
+    .map(e => e.id)
+}
+
+function selectBranchDistractors(
+  pathIds: Set<string>,
+  entities: Entity[],
+  graph: Graph,
+  count: number,
+): string[] {
+  return shuffle(
+    entities
+      .filter(e => !pathIds.has(e.id))
+      .filter(e => {
+        const neighbors = new Set(graph[e.id] ?? [])
+        const pathConnections = [...pathIds].filter(pid => neighbors.has(pid) || (graph[pid] ?? []).includes(e.id))
+        return pathConnections.length === 1
+      })
+  )
+    .slice(0, count)
+    .map(e => e.id)
+}
+
 export function composePuzzle({
   entities,
   graph,
@@ -227,6 +268,7 @@ export function composePuzzle({
   params = DEFAULT_PARAMS,
   domainOverrides,
   intermediateFilterConfig,
+  distractorMode,
 }: {
   entities: Entity[]
   graph: Graph
@@ -236,6 +278,7 @@ export function composePuzzle({
   params?: CompositionParams
   domainOverrides?: DomainOverrides
   intermediateFilterConfig?: IntermediateFilterConfig
+  distractorMode?: 'easy' | 'medium'
 }): ComposedPuzzle | null {
   const effectiveMinQuality = domainOverrides?.minQualityScore ?? MIN_QUALITY_SCORE
   const effectiveMaxHubRatio = domainOverrides?.maxHubRatio ?? MAX_HUB_RATIO
@@ -290,32 +333,74 @@ export function composePuzzle({
   // All path nodes must always be present in bubbles so optimal_path IDs resolve to labels.
   // hasGoodLabel is applied only to neighbor expansion candidates, not the path itself.
   const candidateIds = new Set<string>(optimalPath)
+  const pathIds = new Set(optimalPath)
+  const distractorCount = targetBubbleCount - optimalPath.length
 
-  // When the path is short (3 hops), skip adding neighbors of start/end to the
-  // bubble set — they can create shortcuts that collapse the trimmed path below minimum.
-  const hopsRaw = optimalPath.length - 1
-  const noExpandEndpoints = hopsRaw <= 3
-  const expandIds = noExpandEndpoints
-    ? optimalPath.slice(1, -1)   // intermediates only
-    : optimalPath
+  let middleIds: string[]
+  // Track which bubble IDs should have their connections zeroed (true island nodes)
+  const zeroConnectionIds = new Set<string>()
 
-  for (const id of expandIds) {
-    const neighbors = shuffle(graph[id] ?? [])
-    for (const n of neighbors.slice(0, 4)) {
-      if (hasGoodLabel(n) && n !== startId && n !== endId) candidateIds.add(n)
+  if (distractorMode === 'easy') {
+    // Easy: all non-path bubbles are isolated — zero edges to any path node
+    const isolated = selectIsolatedDistractors(pathIds, entities, graph, distractorCount)
+      .filter(hasGoodLabel)
+    // Fall back: pick more isolated nodes (already filtered); if truly none left, log warning
+    if (isolated.length < distractorCount) {
+      console.warn(`  [easy] Only ${isolated.length}/${distractorCount} isolated distractors available — padding with what we have`)
     }
+    const distractors = isolated
+    // All distractors are islands — zero their connections
+    distractors.forEach(id => zeroConnectionIds.add(id))
+    middleIds = [
+      ...optimalPath.slice(1, -1),
+      ...distractors.slice(0, distractorCount),
+    ]
+  } else if (distractorMode === 'medium') {
+    // Medium: non-path bubbles connect to at most 1 path node (dead-end branches)
+    const branchCount = Math.ceil(distractorCount * 0.6)
+    const branches = selectBranchDistractors(pathIds, entities, graph, branchCount)
+      .filter(hasGoodLabel)
+    const isolated = selectIsolatedDistractors(pathIds, entities, graph, distractorCount)
+      .filter(id => !branches.includes(id) && hasGoodLabel(id))
+    // Isolated padding nodes get their connections zeroed
+    isolated.forEach(id => zeroConnectionIds.add(id))
+    const distractors = [
+      ...branches,
+      ...isolated.slice(0, Math.max(0, distractorCount - branches.length)),
+    ]
+    middleIds = [
+      ...optimalPath.slice(1, -1),
+      ...distractors.slice(0, distractorCount),
+    ]
+  } else {
+    // Default (no distractorMode): original neighbor-expansion + orphan behavior
+    // When the path is short (3 hops), skip adding neighbors of start/end to the
+    // bubble set — they can create shortcuts that collapse the trimmed path below minimum.
+    const hopsRaw = optimalPath.length - 1
+    const noExpandEndpoints = hopsRaw <= 3
+    const expandIds = noExpandEndpoints
+      ? optimalPath.slice(1, -1)   // intermediates only
+      : optimalPath
+
+    for (const id of expandIds) {
+      const neighbors = shuffle(graph[id] ?? [])
+      for (const n of neighbors.slice(0, 4)) {
+        if (hasGoodLabel(n) && n !== startId && n !== endId) candidateIds.add(n)
+      }
+    }
+
+    const allEntityIds = shuffle(entities.map(e => e.id).filter(id => !candidateIds.has(id)))
+    const orphanCount = 2
+    const orphans = allEntityIds.slice(0, orphanCount)
+    orphans.forEach(id => zeroConnectionIds.add(id))
+
+    const otherCandidates = Array.from(candidateIds).filter(id => id !== startId && id !== endId)
+    middleIds = [
+      ...otherCandidates.slice(0, targetBubbleCount - orphanCount - 2),
+      ...orphans,
+    ]
   }
 
-  const allEntityIds = shuffle(entities.map(e => e.id).filter(id => !candidateIds.has(id)))
-  const orphanCount = 2
-  const orphans = allEntityIds.slice(0, orphanCount)
-
-  // Start first, end last — middle filled from other candidates and orphans
-  const otherCandidates = Array.from(candidateIds).filter(id => id !== startId && id !== endId)
-  const middleIds = [
-    ...otherCandidates.slice(0, targetBubbleCount - orphanCount - 2),
-    ...orphans,
-  ]
   const allBubbleIds = [startId, ...middleIds, endId]
 
   const positions = scatterPositions(allBubbleIds, startId, endId)
@@ -332,7 +417,7 @@ export function composePuzzle({
   const connections: Record<string, string[]> = {}
   for (const id of allBubbleIds) {
     connections[id] = (graph[id] ?? []).filter(n => bubbleSet.has(n))
-    if (orphans.includes(id)) connections[id] = []
+    if (zeroConnectionIds.has(id)) connections[id] = []
   }
 
   // Re-run BFS on the trimmed connections graph — the subset may have a shorter path
@@ -461,7 +546,7 @@ export function composePuzzleForDifficulty({
         if (startId === endId) continue
       }
 
-      const puzzle = composePuzzle({ entities, graph, startId, endId, targetBubbleCount, params: round.params, domainOverrides, intermediateFilterConfig })
+      const puzzle = composePuzzle({ entities, graph, startId, endId, targetBubbleCount, params: round.params, domainOverrides, intermediateFilterConfig, distractorMode: targetDifficulty === 'hard' ? undefined : targetDifficulty })
       if (puzzle && puzzle.difficulty === targetDifficulty) {
         const entityMap = new Map(entities.map(e => [e.id, e]))
         const score = scorePathQuality(puzzle.optimalPath, entityMap, puzzle.connections as Graph, effectiveHubThreshold)
