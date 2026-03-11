@@ -24,8 +24,7 @@ import { CategoryDomain, SubqueryDifficulty } from '../wikidata'
 import { fetchEntitiesCached } from '../entityCache'
 import { buildGraph } from '../graphBuilder'
 import { composePuzzleForDifficulty, scorePathQuality, Difficulty, ComposedPuzzle, IntermediateFilterConfig } from '../puzzleComposer'
-import { generateNarrative } from '../narrativeGenerator'
-import { evaluatePuzzle, CONNECTION_TYPES } from '../puzzleQC'
+import { evaluateAndSelectPuzzle, PuzzleCandidate, CONNECTION_TYPES } from '../puzzleQC'
 import { readDomainOverrides } from '../domainConfig'
 import { checkDuplicate } from '../puzzleDedup'
 
@@ -37,6 +36,7 @@ interface PuzzleDraft {
   pathLabels: string[]
   qcScore: number
   qualityScore: number
+  narrative: string
   edgeLabels?: Record<string, string>
 }
 
@@ -68,6 +68,7 @@ const domainArg = process.argv.find(a => a.startsWith('--domain='))?.split('=')[
 const dateArg = process.argv.find(a => a.match(/^\d{4}-\d{2}-\d{2}$/))
 const DRY_RUN = process.argv.includes('--dry-run')
 const FORCE_REFRESH = process.argv.includes('--refresh-cache')
+const MAX_LLM_CANDIDATES = 5  // collect up to this many distinct paths before calling LLM
 
 if (!domainArg || !dateArg) {
   console.error('Usage: npx ts-node src/scripts/run-domain.ts --domain <domain> --date <YYYY-MM-DD> [--dry-run] [--refresh-cache]')
@@ -205,26 +206,16 @@ async function runDifficulty(difficulty: Difficulty, entityLimit: number): Promi
     if (draft) {
       console.log(`[${domain}/${difficulty}] Using draft puzzle: ${draft.pathLabels.join(' → ')}`)
       const puzzle = draft.puzzle
-
-      // Re-fetch entities only for narrative generation (need labels)
-      const maxDifficulty = DIFFICULTY_TO_MAX_SUBQUERY[difficulty]
-      const { entities: rawEntities } = await fetchEntitiesCached(domain, entityLimit, { forceRefresh: false, maxDifficulty })
-      const filtered = filterEntities(rawEntities, domain)
-      const entityMap = new Map(filtered.map((e: any) => [e.id, e]))
       const pathLabels = draft.pathLabels
 
-      const narrative = await generateNarrative({
-        startLabel: capitalize(entityMap.get(puzzle.startId)?.label ?? puzzle.startId),
-        endLabel: capitalize(entityMap.get(puzzle.endId)?.label ?? puzzle.endId),
-        pathLabels: pathLabels.map(capitalize),
-        category: domain,
-      })
+      // Narrative was generated during dry-run story selection — use it directly
+      const narrative = draft.narrative ?? ''
 
       await supabase.from('puzzles').upsert({
         category_id: await getCategoryId(domain),
         date,
-        start_concept: capitalize(entityMap.get(puzzle.startId)?.label ?? puzzle.startId),
-        end_concept: capitalize(entityMap.get(puzzle.endId)?.label ?? puzzle.endId),
+        start_concept: capitalize(puzzle.bubbles.find((b: any) => b.id === puzzle.startId)?.label ?? puzzle.startId),
+        end_concept: capitalize(puzzle.bubbles.find((b: any) => b.id === puzzle.endId)?.label ?? puzzle.endId),
         bubbles: puzzle.bubbles,
         connections: puzzle.connections,
         optimal_path: puzzle.optimalPath,
@@ -252,55 +243,102 @@ async function runDifficulty(difficulty: Difficulty, entityLimit: number): Promi
   const interestingTypes = INTERMEDIATE_BRIDGE_TYPES[domain]
   const intermediateFilterConfig: IntermediateFilterConfig | undefined =
     anchorType && interestingTypes ? { anchorType, interestingTypes } : undefined
-  const puzzle = composePuzzleForDifficulty({ entities: filtered, graph, entityIds, targetDifficulty: difficulty, domainOverrides, intermediateFilterConfig })
-  if (!puzzle) {
-    console.log(`[${domain}/${difficulty}] No puzzle composed (limit=${entityLimit})`)
-    return null
-  }
 
-  const entityMap = new Map(filtered.map((e: any) => [e.id, e]))
-  const pathLabels = puzzle.optimalPath.map(id => entityMap.get(id)?.label ?? id)
-  const qScore = scorePathQuality(puzzle.optimalPath, entityMap as any, puzzle.connections as any, domainOverrides?.hubRelatedIdsThreshold)
+  // Collect up to MAX_LLM_CANDIDATES distinct start/end pairs before calling LLM
+  const candidates: Array<{ puzzle: ComposedPuzzle; pathLabels: string[]; qualityScore: number; edgeLabels: Record<string, string> }> = []
+  const usedStartEnds = new Set<string>()
 
-  console.log(`[${domain}/${difficulty}] Path: ${pathLabels.join(' → ')} (quality=${qScore.total.toFixed(1)})`)
+  for (let attempt = 0; attempt < MAX_LLM_CANDIDATES * 3 && candidates.length < MAX_LLM_CANDIDATES; attempt++) {
+    const puzzle = composePuzzleForDifficulty({ entities: filtered, graph, entityIds, targetDifficulty: difficulty, domainOverrides, intermediateFilterConfig })
+    if (!puzzle) continue
 
-  // Cross-day deduplication check (dry-run only — publish uses the saved draft)
-  if (DRY_RUN) {
-    const categoryId = await getCategoryId(domain)
-    if (categoryId) {
-      const dedup = await checkDuplicate(supabase, categoryId, difficulty, date, puzzle.optimalPath)
-      if (dedup.isDuplicate) {
-        console.log(`[${domain}/${difficulty}] ✗ DEDUP rejected: ${dedup.reason}`)
-        return null
+    // Avoid near-identical start/end pairs
+    const pairKey = `${puzzle.startId}|${puzzle.endId}`
+    if (usedStartEnds.has(pairKey)) continue
+    usedStartEnds.add(pairKey)
+
+    const entityMap = new Map(filtered.map((e: any) => [e.id, e]))
+    const pathLabels = puzzle.optimalPath.map((id: string) => entityMap.get(id)?.label ?? id)
+
+    // Cross-day deduplication check (dry-run only — publish uses the saved draft)
+    if (DRY_RUN) {
+      const categoryId = await getCategoryId(domain)
+      if (categoryId) {
+        const dedup = await checkDuplicate(supabase, categoryId, difficulty, date, puzzle.optimalPath)
+        if (dedup.isDuplicate) {
+          console.log(`[${domain}/${difficulty}] ✗ DEDUP rejected (attempt ${attempt + 1}): ${dedup.reason}`)
+          continue
+        }
       }
     }
-  }
 
-  const connectionType = CONNECTION_TYPES[domain]?.[difficulty] ?? 'related concepts'
-  const qcResult = await evaluatePuzzle(domain, difficulty, pathLabels, connectionType, domain)
+    const qScore = scorePathQuality(puzzle.optimalPath, entityMap as any, puzzle.connections as any, domainOverrides?.hubRelatedIdsThreshold)
+    console.log(`[${domain}/${difficulty}] Candidate ${candidates.length + 1}: ${pathLabels.join(' → ')} (quality=${qScore.total.toFixed(1)})`)
 
-  console.log(`[${domain}/${difficulty}] QC: ${qcResult.pass ? '✓ PASS' : '✗ FAIL'} (${qcResult.score}/10) — ${qcResult.verdict}`)
-  for (const issue of qcResult.issues) console.log(`  ⚠ ${issue}`)
-
-  // Save passing puzzle as draft for the publish pass
-  if (DRY_RUN && qcResult.pass) {
+    // Build filtered edge labels for this candidate
     const bubbleSet = new Set(puzzle.bubbles.map((b: any) => b.id))
     const filteredEdgeLabels: Record<string, string> = {}
     for (const [key, label] of Object.entries(edgeLabels)) {
       const [a, b] = key.split('|')
       if (bubbleSet.has(a) && bubbleSet.has(b)) filteredEdgeLabels[key] = label
     }
-    saveDraft(difficulty, { puzzle, pathLabels, qcScore: qcResult.score, qualityScore: qScore.total, edgeLabels: filteredEdgeLabels })
+
+    candidates.push({ puzzle, pathLabels, qualityScore: qScore.total, edgeLabels: filteredEdgeLabels })
+  }
+
+  if (candidates.length === 0) {
+    console.log(`[${domain}/${difficulty}] No puzzle composed (limit=${entityLimit})`)
+    return null
+  }
+
+  // LLM: evaluate all candidates for validity + story quality, pick winner, write narrative
+  const connectionType = CONNECTION_TYPES[domain]?.[difficulty] ?? 'related concepts'
+  const llmCandidates: PuzzleCandidate[] = candidates.map((c, i) => ({ pathLabels: c.pathLabels, index: i }))
+
+  console.log(`[${domain}/${difficulty}] Evaluating ${candidates.length} candidate(s) for story quality...`)
+  const selection = await evaluateAndSelectPuzzle(llmCandidates, domain, difficulty, connectionType)
+
+  if (!selection || !selection.qcResult.pass) {
+    const score = selection?.qcResult.score ?? 0
+    const verdict = selection?.qcResult.verdict ?? 'no valid candidates'
+    console.log(`[${domain}/${difficulty}] QC: ✗ FAIL (${score}/10) — ${verdict}`)
+    for (const issue of selection?.qcResult.issues ?? []) console.log(`  ⚠ ${issue}`)
+    return {
+      domain, difficulty,
+      score,
+      pass: false,
+      path: candidates[0]?.pathLabels ?? [],
+      issues: selection?.qcResult.issues ?? [],
+      qualityScore: candidates[0]?.qualityScore ?? 0,
+    }
+  }
+
+  const winner = candidates[selection.winnerIndex]
+  const storyScoresStr = selection.storyScores.map((s, i) => `${i + 1}:${s}`).join(' ')
+  console.log(`[${domain}/${difficulty}] QC: ✓ PASS (${selection.qcResult.score}/10) — story scores: [${storyScoresStr}] — winner: ${selection.winnerIndex + 1}`)
+  console.log(`[${domain}/${difficulty}] Path: ${winner.pathLabels.join(' → ')}`)
+  for (const issue of selection.qcResult.issues) console.log(`  ⚠ ${issue}`)
+
+  // Save winning puzzle as draft for the publish pass (includes narrative from story selection)
+  if (DRY_RUN) {
+    saveDraft(difficulty, {
+      puzzle: winner.puzzle,
+      pathLabels: winner.pathLabels,
+      qcScore: selection.qcResult.score,
+      qualityScore: winner.qualityScore,
+      narrative: selection.narrative,
+      edgeLabels: winner.edgeLabels,
+    })
   }
 
   return {
     domain,
     difficulty,
-    score: qcResult.score,
-    pass: qcResult.pass,
-    path: pathLabels,
-    issues: qcResult.issues,
-    qualityScore: qScore.total,
+    score: selection.qcResult.score,
+    pass: true,
+    path: winner.pathLabels,
+    issues: selection.qcResult.issues,
+    qualityScore: winner.qualityScore,
   }
 }
 
