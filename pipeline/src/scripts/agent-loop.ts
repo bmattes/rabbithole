@@ -41,9 +41,10 @@ const domainArg = process.argv.find(a => a.startsWith('--domain='))?.split('=')[
   ?? process.argv[process.argv.indexOf('--domain') + 1]
 const dateArg = process.argv.find(a => a.match(/^\d{4}-\d{2}-\d{2}$/))
 const FORCE_REFRESH = process.argv.includes('--refresh-cache')
+const FORCE_OVERWRITE = process.argv.includes('--force')  // pass --force to run-domain to overwrite existing puzzles
 
 if (!domainArg || !dateArg) {
-  console.error('Usage: npx ts-node src/scripts/agent-loop.ts --domain <domain> --date <YYYY-MM-DD> [--refresh-cache]')
+  console.error('Usage: npx ts-node src/scripts/agent-loop.ts --domain <domain> --date <YYYY-MM-DD> [--refresh-cache] [--force]')
   process.exit(1)
 }
 
@@ -65,7 +66,8 @@ interface RoundResult {
 // Run run-domain.ts with --dry-run and parse RESULT lines
 function runDryRun(extraArgs = '', forceRefresh = false): RoundResult[] {
   const refreshFlag = (FORCE_REFRESH || forceRefresh) ? '--refresh-cache' : ''
-  const cmd = `npx ts-node ${SCRIPT_DIR}/run-domain.ts --domain ${domain} --date ${date} --dry-run ${refreshFlag} ${extraArgs}`
+  const forceFlag = FORCE_OVERWRITE ? '--force' : ''
+  const cmd = `npx ts-node ${SCRIPT_DIR}/run-domain.ts --domain ${domain} --date ${date} --dry-run ${refreshFlag} ${forceFlag} ${extraArgs}`
   console.log(`\n  $ ${cmd.trim()}`)
   let output = ''
   try {
@@ -91,7 +93,8 @@ function runDryRun(extraArgs = '', forceRefresh = false): RoundResult[] {
 // Run the final publish pass (no --dry-run), return parsed results
 function runPublish(): RoundResult[] {
   const refreshFlag = FORCE_REFRESH ? '--refresh-cache' : ''
-  const cmd = `npx ts-node ${SCRIPT_DIR}/run-domain.ts --domain ${domain} --date ${date} ${refreshFlag}`
+  const forceFlag = FORCE_OVERWRITE ? '--force' : ''
+  const cmd = `npx ts-node ${SCRIPT_DIR}/run-domain.ts --domain ${domain} --date ${date} ${refreshFlag} ${forceFlag}`
   console.log(`\n  $ ${cmd.trim()}`)
   let output = ''
   try {

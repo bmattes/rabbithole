@@ -68,6 +68,7 @@ const domainArg = process.argv.find(a => a.startsWith('--domain='))?.split('=')[
 const dateArg = process.argv.find(a => a.match(/^\d{4}-\d{2}-\d{2}$/))
 const DRY_RUN = process.argv.includes('--dry-run')
 const FORCE_REFRESH = process.argv.includes('--refresh-cache')
+const FORCE_OVERWRITE = process.argv.includes('--force')  // skip isAlreadyPublished check — overwrite existing puzzles
 const MAX_LLM_CANDIDATES = 5  // collect up to this many distinct paths before calling LLM
 
 if (!domainArg || !dateArg) {
@@ -194,8 +195,8 @@ async function isAlreadyPublished(difficulty: Difficulty): Promise<boolean> {
 async function runDifficulty(difficulty: Difficulty, entityLimit: number): Promise<DomainResult | null> {
   const domainOverrides = readDomainOverrides(domain)
 
-  // Skip difficulties that are already published (both dry-run and publish passes)
-  if (await isAlreadyPublished(difficulty)) {
+  // Skip difficulties that are already published (unless --force overwrite is set)
+  if (!FORCE_OVERWRITE && await isAlreadyPublished(difficulty)) {
     console.log(`[${domain}/${difficulty}] ✓ Already published for ${date}, skipping`)
     return { domain, difficulty, score: 10, pass: true, path: [], issues: [], qualityScore: 0 }
   }
