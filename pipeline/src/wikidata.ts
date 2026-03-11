@@ -225,16 +225,6 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
   ?a wikibase:sitelinks ?links. FILTER(?links > 40)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'influenced by'),
-  // Rock song → genre (hard: connects songs across subgenres)
-  sq('hard', ['song', 'genre'], (limit) => `
-SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
-  VALUES ?topGenre { wd:Q11399 wd:Q5647 wd:Q38848 wd:Q484641 wd:Q45981 }
-  VALUES ?songType { wd:Q7366 wd:Q134556 wd:Q208569 }
-  ?a wdt:P31 ?songType; wdt:P136 ?b; wdt:P136 ?topGenre.
-  ?a wikibase:sitelinks ?links. FILTER(?links > 15)
-  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 20)
-  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
-} ORDER BY DESC(?links) LIMIT ${limit}`, 'belongs to genre'),
 ]
 
 // Hip-hop (Q11401): artist→label, song→performer, artist→influences
@@ -270,15 +260,6 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
   ?a wikibase:sitelinks ?links. FILTER(?links > 40)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'influenced by'),
-  sq('hard', ['song', 'genre'], (limit) => `
-SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
-  VALUES ?topGenre { wd:Q11401 wd:Q131272 }
-  VALUES ?songType { wd:Q7366 wd:Q134556 wd:Q208569 }
-  ?a wdt:P31 ?songType; wdt:P136 ?b; wdt:P136 ?topGenre.
-  ?a wikibase:sitelinks ?links. FILTER(?links > 15)
-  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 20)
-  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
-} ORDER BY DESC(?links) LIMIT ${limit}`, 'belongs to genre'),
 ]
 
 // Pop music (Q37073)
@@ -314,15 +295,6 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
   ?a wikibase:sitelinks ?links. FILTER(?links > 40)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'influenced by'),
-  sq('hard', ['song', 'genre'], (limit) => `
-SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
-  VALUES ?topGenre { wd:Q37073 wd:Q484641 }
-  VALUES ?songType { wd:Q7366 wd:Q134556 wd:Q208569 }
-  ?a wdt:P31 ?songType; wdt:P136 ?b; wdt:P136 ?topGenre.
-  ?a wikibase:sitelinks ?links. FILTER(?links > 15)
-  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 20)
-  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
-} ORDER BY DESC(?links) LIMIT ${limit}`, 'belongs to genre'),
 ]
 
 // R&B / Soul (Q131272 R&B, Q213714 soul)
@@ -358,15 +330,6 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
   ?a wikibase:sitelinks ?links. FILTER(?links > 40)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'influenced by'),
-  sq('hard', ['song', 'genre'], (limit) => `
-SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
-  VALUES ?topGenre { wd:Q131272 wd:Q213714 }
-  VALUES ?songType { wd:Q7366 wd:Q134556 wd:Q208569 }
-  ?a wdt:P31 ?songType; wdt:P136 ?b; wdt:P136 ?topGenre.
-  ?a wikibase:sitelinks ?links. FILTER(?links > 15)
-  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 20)
-  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
-} ORDER BY DESC(?links) LIMIT ${limit}`, 'belongs to genre'),
 ]
 
 // Country music (Q83440)
@@ -402,15 +365,6 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
   ?a wikibase:sitelinks ?links. FILTER(?links > 30)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'influenced by'),
-  sq('hard', ['song', 'genre'], (limit) => `
-SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
-  VALUES ?topGenre { wd:Q83440 wd:Q1190434 }
-  VALUES ?songType { wd:Q7366 wd:Q134556 wd:Q208569 }
-  ?a wdt:P31 ?songType; wdt:P136 ?b; wdt:P136 ?topGenre.
-  ?a wikibase:sitelinks ?links. FILTER(?links > 10)
-  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 15)
-  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
-} ORDER BY DESC(?links) LIMIT ${limit}`, 'belongs to genre'),
 ]
 
 // Video games: game → series, game → developer, game → publisher
