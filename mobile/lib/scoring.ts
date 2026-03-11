@@ -35,12 +35,16 @@ export interface NodeScore {
 /**
  * Score each intermediate node in the player's final path.
  * Start and end nodes are excluded.
+ *
+ * For Hard difficulty, nodes on any alternativePath are treated as on-path
+ * (awarded 'wrong_place' partial credit rather than 'wrong_node' zero).
  */
 export function computeNodeScores(
   playerPath: string[],
   optimalPath: string[],
   difficulty: string,
-  labelMap: Record<string, string>
+  labelMap: Record<string, string>,
+  alternativePaths?: string[][] | null
 ): NodeScore[] {
   const budget = NODE_BUDGET[difficulty] ?? NODE_BUDGET.easy
   const intermediates = playerPath.slice(1, -1)
@@ -52,6 +56,16 @@ export function computeNodeScores(
   const optimalSet = new Set(optimalIntermediates)
   const awardedWrongPlace = new Set<string>()
 
+  // Build a set of all intermediate nodes across all alternate paths (Hard only)
+  const altPathSet = new Set<string>()
+  if (difficulty === 'hard' && alternativePaths) {
+    for (const ap of alternativePaths) {
+      for (const nodeId of ap.slice(1, -1)) {
+        altPathSet.add(nodeId)
+      }
+    }
+  }
+
   return intermediates.map((id, i) => {
     let category: NodeCategory
     let points: number
@@ -60,6 +74,11 @@ export function computeNodeScores(
       category = 'right_place'
       points = Math.round(perNode)
     } else if (optimalSet.has(id) && !awardedWrongPlace.has(id)) {
+      awardedWrongPlace.add(id)
+      category = 'wrong_place'
+      points = Math.round(perNode * 0.4)
+    } else if (difficulty === 'hard' && altPathSet.has(id) && !awardedWrongPlace.has(id)) {
+      // Node is on a valid alternate path — treat as partial credit (wrong_place)
       awardedWrongPlace.add(id)
       category = 'wrong_place'
       points = Math.round(perNode * 0.4)
@@ -81,13 +100,28 @@ export function computeFinalScore(liveScore: number, nodeScores: NodeScore[]): n
 // Keep for XP calculation
 export function computePathMultiplier(
   playerPath: string[],
-  optimalPath: string[]
+  optimalPath: string[],
+  alternativePaths?: string[][] | null
 ): number {
   const optimalSet = new Set(optimalPath)
   const playerHops = playerPath.length - 1
   const optimalHops = optimalPath.length - 1
   const extraHops = Math.max(0, playerHops - optimalHops)
-  const offPathNodes = playerPath.slice(1, -1).filter(id => !optimalSet.has(id)).length
+
+  // Build set of all nodes across all alternate paths
+  const altSet = new Set<string>()
+  if (alternativePaths) {
+    for (const ap of alternativePaths) {
+      for (const nodeId of ap) {
+        altSet.add(nodeId)
+      }
+    }
+  }
+
+  // Nodes not on the optimal path AND not on any alternate path are penalized
+  const offPathNodes = playerPath.slice(1, -1).filter(
+    id => !optimalSet.has(id) && !altSet.has(id)
+  ).length
   const hopPenalty = Math.pow(0.80, extraHops)
   const offPathPenalty = Math.pow(0.85, offPathNodes)
   return hopPenalty * offPathPenalty

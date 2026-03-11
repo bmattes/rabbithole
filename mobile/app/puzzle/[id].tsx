@@ -179,7 +179,7 @@ export default function PuzzleScreen() {
   async function handlePathComplete(path: string[]) {
     const timeMs = stop()
     const labelMap = Object.fromEntries(puzzle!.bubbles.map(b => [b.id, b.label]))
-    const nodeScores = computeNodeScores(path, puzzle!.optimal_path, difficulty, labelMap)
+    const nodeScores = computeNodeScores(path, puzzle!.optimal_path, difficulty, labelMap, puzzle!.alternative_paths)
     const finalScore = computeFinalScore(liveScoreRef.current, nodeScores)
     const nodeScoresParam = encodeURIComponent(JSON.stringify(nodeScores))
 

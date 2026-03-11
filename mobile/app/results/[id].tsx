@@ -354,6 +354,18 @@ export default function ResultsScreen() {
         </View>
       </Modal>
 
+      {/* Hard difficulty framing */}
+      {difficulty === 'hard' && hopsNum === optimalHopsNum && !samePathAsOptimal && (
+        <View style={styles.hardOptimalBanner}>
+          <Text style={styles.hardOptimalBannerText}>Optimal route!</Text>
+        </View>
+      )}
+      {difficulty === 'hard' && hopsNum > optimalHopsNum && (
+        <View style={styles.hardAltBanner}>
+          <Text style={styles.hardAltBannerText}>Shortest route: {optimalHopsNum} hop{optimalHopsNum !== 1 ? 's' : ''}</Text>
+        </View>
+      )}
+
       {/* Path comparison */}
       <View style={[styles.pathsCard, samePathAsOptimal && styles.pathsCardColumn]}>
         {samePathAsOptimal ? (
@@ -499,6 +511,10 @@ const styles = StyleSheet.create({
   pathTitle: { color: colors.textTertiary, fontSize: 12, fontWeight: '600', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 },
   optimalBanner: { backgroundColor: colors.accentLight, borderRadius: 10, padding: 10, marginBottom: 14, alignItems: 'center', borderWidth: 1, borderColor: '#c4b5fd' },
   optimalBannerText: { color: colors.accent, fontSize: 13, fontWeight: '700' },
+  hardOptimalBanner: { backgroundColor: colors.accentLight, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 14, marginBottom: 12, alignItems: 'center', borderWidth: 1, borderColor: '#c4b5fd', width: '100%' },
+  hardOptimalBannerText: { color: colors.accent, fontSize: 13, fontWeight: '700' },
+  hardAltBanner: { backgroundColor: colors.bgCard, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 14, marginBottom: 12, alignItems: 'center', borderWidth: 1, borderColor: colors.border, width: '100%' },
+  hardAltBannerText: { color: colors.textSecondary, fontSize: 13, fontWeight: '600' },
   pathDivider: { width: 1, backgroundColor: colors.border, marginHorizontal: 16 },
   narrativeCard: {
     backgroundColor: colors.bgCard,
