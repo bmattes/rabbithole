@@ -356,6 +356,25 @@ async function runDifficulty(difficulty: Difficulty, entityLimit: number): Promi
       narrative: selection.narrative,
       edgeLabels: winner.edgeLabels,
     })
+  } else {
+    // Fresh compose on publish pass (no draft available — e.g. all dry-run attempts were DEDUP-rejected)
+    const puzzle = winner.puzzle
+    const { error: upsertError } = await supabase.from('puzzles').upsert({
+      category_id: await getCategoryId(domain),
+      date,
+      start_concept: capitalize(puzzle.bubbles.find((b: any) => b.id === puzzle.startId)?.label ?? puzzle.startId),
+      end_concept: capitalize(puzzle.bubbles.find((b: any) => b.id === puzzle.endId)?.label ?? puzzle.endId),
+      bubbles: puzzle.bubbles,
+      connections: puzzle.connections,
+      optimal_path: puzzle.optimalPath,
+      difficulty: puzzle.difficulty,
+      narrative: selection.narrative,
+      status: 'published',
+      qc_score: selection.qcResult.score,
+      edge_labels: winner.edgeLabels ?? null,
+    }, { onConflict: 'category_id,date,difficulty' })
+    if (upsertError) throw new Error(`Supabase upsert failed: ${upsertError.message}`)
+    console.log(`[${domain}/${difficulty}] ✓ Published (fresh compose)`)
   }
 
   return {
