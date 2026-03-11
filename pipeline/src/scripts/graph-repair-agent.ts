@@ -352,12 +352,15 @@ async function run() {
   for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
     console.log(`\n--- Iteration ${iteration}/${MAX_ITERATIONS} ---`)
 
-    // Force-fetch fresh entities
-    console.log(`  Fetching ${domain} entities (force-refresh)...`)
+    // Force-fetch fresh entities — only fetch up to the highest difficulty we need
+    // (avoids running expensive hard subqueries like P737 when only easy/medium is missing)
+    const highestNeeded = missingDifficulties.includes('hard') ? 'hard'
+      : missingDifficulties.includes('medium') ? 'medium' : 'easy'
+    console.log(`  Fetching ${domain} entities (force-refresh, maxDifficulty=${highestNeeded})...`)
     clearDomainCache()
     let entities: Entity[]
     try {
-      const result = await fetchEntities(domain as any, 1500)
+      const result = await fetchEntities(domain as any, 1500, highestNeeded as any)
       entities = result.entities
       console.log(`  Fetched ${entities.length} entities`)
     } catch (e: any) {
