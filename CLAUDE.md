@@ -28,7 +28,7 @@ npx jest --no-coverage        # run tests
 
 **Starter categories for new users:** Movies + Soccer
 
-### Active Wikidata domains (24)
+### Active Wikidata domains (22)
 | Name | wikidata_domain | ID |
 |------|----------------|-----|
 | American Football | americanfootball | b607becf-ab90-4a35-9595-f6473612d364 |
@@ -44,13 +44,10 @@ npx jest --no-coverage        # run tests
 | Military History | military | c31fd646-f615-413e-9238-9987af82a93b |
 | Movies | movies | 5f522844-78b3-464f-9105-d15a8f746d28 |
 | Philosophy | philosophy | b6353186-74d1-49ab-b159-3bd2aa1b514c |
-| Pop Music | mb_pop | b8b69325-20c7-43c7-88d0-0b2cdc82de8d |
-| R&B / Soul | mb_rnb | 182d8ddc-d2b7-42a7-88fc-5ada2852a235 |
 | Rock Music | mb_rock | 7b932160-d1a9-43b6-b165-4e3e826a7da2 |
 | Royals & Monarchs | royals | 8a6efe6b-047a-4883-ad8f-b8bdd1c79345 |
 | Science | science | 55dcfe2f-84d7-44d6-9558-97de003c436e |
 | Space & Astronomy | space | 59b7e254-b17f-4d69-8554-6e45d1084839 |
-| Tennis | tennis | 8099cae3-0c71-4af2-83e1-9ef2ec183203 |
 | TV Shows | tv | b705171c-177e-4a32-b82d-d0b968c8e72f |
 | Video Games | videogames | 6314e218-91c5-4a29-abb6-8aa8db8b4177 |
 | Visual Art | art | 4b06167c-5cb6-448f-aa91-06272425e835 |
@@ -59,6 +56,8 @@ npx jest --no-coverage        # run tests
 ### Inactive / problematic domains
 | Name | wikidata_domain | Reason |
 |------|----------------|--------|
+| Pop Music | mb_pop | Wikidata label graph too cross-genre — major labels pull in McCartney, Bowie, etc.; set active=false 2026-03-10 |
+| R&B / Soul | mb_rnb | Wikidata label graph cross-genre pollution + P737 influence subquery times out; set active=false 2026-03-10 |
 | Mythology | mythology | Wikidata graph too small/slow — deity graph only 613 entities, Wikidata refresh consistently times out; set active=false 2026-03-10 |
 | Sport | sport | Medium/hard structurally broken — Wikidata multi-subquery timeouts; set active=false 2026-03-09 |
 | Tennis | tennis | Easy permanently impossible (graph too sparse, only 194 anchors); set active=false 2026-03-09 |
