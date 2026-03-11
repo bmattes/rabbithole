@@ -80,4 +80,23 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
   ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 20)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'part of cuisine'),
+  // Dish → key ingredient (easy: Pizza→tomato, Sushi→rice, Tacos→corn tortilla — ingredient as bridge between dishes)
+  sq('easy', ['dish', 'ingredient'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  VALUES ?foodType { wd:Q746549 wd:Q189796 }
+  ?a wdt:P31 ?foodType; wdt:P186|wdt:P527 ?b.
+  VALUES ?ingredientType { wd:Q25403900 wd:Q2095372 wd:Q3314483 wd:Q10676833 wd:Q1466448 wd:Q207123 }
+  ?b wdt:P31 ?ingredientType.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 8)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 10)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'made with'),
+  // Dish → cuisine (easy: Sushi→Japanese cuisine, Pizza→Italian cuisine — cuisine as recognisable bridge)
+  sq('easy', ['dish', 'other'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  ?a wdt:P31 wd:Q746549; wdt:P2012 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 10)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 30)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'part of cuisine'),
 ]

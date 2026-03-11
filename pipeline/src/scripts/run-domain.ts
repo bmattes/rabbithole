@@ -118,9 +118,9 @@ const INTERMEDIATE_BRIDGE_TYPES: Record<string, Set<string>> = {
 }
 
 const UNGUESSABLE_TYPES = new Set(['office', 'field', 'category'])
-// For food/space domains: country nodes create wrong_domain bridges — strip them from the graph
+// Country nodes are valid bridges for food (Italy→pizza, Japan→sushi) — no domain stripping needed
 const FOOD_UNGUESSABLE_TYPES = new Set(['office', 'field', 'category', 'country'])
-const COUNTRY_STRIP_DOMAINS = new Set(['food'])
+const COUNTRY_STRIP_DOMAINS = new Set<string>([])
 
 function filterEntities(entities: any[], domainName?: string): any[] {
   const types = (domainName && COUNTRY_STRIP_DOMAINS.has(domainName)) ? FOOD_UNGUESSABLE_TYPES : UNGUESSABLE_TYPES
