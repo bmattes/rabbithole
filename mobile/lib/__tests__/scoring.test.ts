@@ -99,6 +99,9 @@ describe('computeNodeScores', () => {
   })
 })
 
+// computePathMultiplier is tested here in advance of being fully wired into
+// production scoring — the alternativePaths param is ready but not yet called
+// from puzzle/[id].tsx or the XP path.
 describe('computePathMultiplier', () => {
   const optimalPath = ['start', 'a', 'b', 'end']
   const altPaths = [['start', 'c', 'd', 'e', 'end']]

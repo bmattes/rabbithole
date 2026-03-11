@@ -97,7 +97,8 @@ export function computeFinalScore(liveScore: number, nodeScores: NodeScore[]): n
   return Math.max(100, Math.min(1000, liveScore + nodeTotal))
 }
 
-// Keep for XP calculation
+// Note: currently used for XP calculation via the results screen — see computeRunXP in api.ts.
+// The alternativePaths param is wired for future XP integration; not yet called from production scoring.
 export function computePathMultiplier(
   playerPath: string[],
   optimalPath: string[],

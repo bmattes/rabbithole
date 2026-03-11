@@ -357,7 +357,7 @@ export default function ResultsScreen() {
       {/* Hard difficulty framing */}
       {difficulty === 'hard' && hopsNum === optimalHopsNum && !samePathAsOptimal && (
         <View style={styles.hardOptimalBanner}>
-          <Text style={styles.hardOptimalBannerText}>Optimal route!</Text>
+          <Text style={styles.hardOptimalBannerText}>Shortest route!</Text>
         </View>
       )}
       {difficulty === 'hard' && hopsNum > optimalHopsNum && (
