@@ -273,9 +273,41 @@ async function run() {
       const { overrides: suggested, forceRefresh: shouldRefresh, structural } = diagnosis
 
       if (structural) {
-        structuralFailure = true
-        console.log('  Stopping retries — structural graph failure, no config fix possible.')
-        break
+        const missingNow = ['easy', 'medium', 'hard'].filter(d => !bestResults.has(d))
+        console.log(`  Structural graph failure — launching graph-repair-agent for ${missingNow.join(', ')}...`)
+        const repairCmd = `npx ts-node ${SCRIPT_DIR}/graph-repair-agent.ts --domain ${domain} --missing ${missingNow.join(',')}`
+        console.log(`  $ ${repairCmd}`)
+        try {
+          const repairOutput = execSync(repairCmd, { cwd: path.join(__dirname, '../../'), encoding: 'utf8', stdio: 'pipe', timeout: 20 * 60 * 1000 })
+          console.log(repairOutput.split('\n').map(l => '  ' + l).join('\n'))
+          if (repairOutput.includes('REPAIR_SUCCESS')) {
+            console.log('  Graph repaired — resetting config and retrying composition...')
+            // Reset overrides so we start fresh with the enriched graph
+            currentOverrides = {}
+            updateDomainConfig(currentOverrides)
+            nextForceRefresh = true
+            stuckCount = 0
+            // Continue the main loop — don't break
+          } else {
+            console.log('  Graph repair did not reach target — continuing with what we have.')
+            structuralFailure = true
+            nextForceRefresh = true  // at least try with whatever new subqueries were added
+          }
+        } catch (e: any) {
+          const repairOutput = (e.stdout ?? '') + (e.stderr ?? '')
+          console.log(repairOutput.split('\n').map((l: string) => '  ' + l).join('\n'))
+          if (repairOutput.includes('REPAIR_SUCCESS')) {
+            currentOverrides = {}
+            updateDomainConfig(currentOverrides)
+            nextForceRefresh = true
+            stuckCount = 0
+          } else {
+            structuralFailure = true
+            nextForceRefresh = true
+          }
+        }
+        if (structuralFailure) break
+        continue  // skip the rest of this iteration and retry composition
       }
 
       if (shouldRefresh) nextForceRefresh = true
