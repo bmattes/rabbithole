@@ -45,4 +45,34 @@ SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links WHERE {
   ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 30)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } ORDER BY DESC(?links) LIMIT ${limit}`, 'influenced by'),
+  // Rock band → member (hard: artist ↔ band, enables person→band→person paths avoiding labels)
+  sq('hard', ['person', 'other'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  VALUES ?genre { wd:Q11399 wd:Q5647 wd:Q38848 wd:Q484641 wd:Q45981 }
+  ?b wdt:P31 wd:Q215380; wdt:P136 ?genre.
+  ?a wdt:P31 wd:Q5; wdt:P463|wdt:P361 ?b.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 15)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 20)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'member of'),
+  // Rock album → performer (medium: iconic rock albums as bridges between artists)
+  sq('medium', ['other', 'person'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  VALUES ?genre { wd:Q11399 wd:Q5647 wd:Q38848 wd:Q484641 wd:Q45981 }
+  ?a wdt:P31 wd:Q482994; wdt:P175 ?b; wdt:P136 ?genre.
+  ?b wdt:P31 wd:Q5.
+  ?a wikibase:sitelinks ?links. FILTER(?links > 20)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 20)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'performed on'),
+  // Rock subgenre bridge (hard: specific subgenres — grunge/punk/metal — connect artists without going through major labels)
+  sq('hard', ['person', 'other'], (limit) => `
+SELECT DISTINCT ?a ?aLabel ?b ?bLabel ?links ?blinks WHERE {
+  VALUES ?subgenre { wd:Q11366 wd:Q43343 wd:Q45981 wd:Q38848 wd:Q58339 wd:Q484641 wd:Q11399 wd:Q5647 wd:Q484641 wd:Q208504 }
+  ?a wdt:P31 wd:Q5; wdt:P106 wd:Q639669; wdt:P136 ?b.
+  FILTER(?b IN (wd:Q11366, wd:Q43343, wd:Q45981, wd:Q38848, wd:Q58339, wd:Q484641, wd:Q208504))
+  ?a wikibase:sitelinks ?links. FILTER(?links > 20)
+  ?b wikibase:sitelinks ?blinks. FILTER(?blinks > 30)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} ORDER BY DESC(?links) LIMIT ${limit}`, 'plays genre'),
 ]
