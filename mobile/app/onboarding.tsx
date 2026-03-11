@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { View, Text, Pressable, StyleSheet, ScrollView, ActivityIndicator } from 'react-native'
+import { View, Text, Pressable, StyleSheet, ScrollView, ActivityIndicator, useWindowDimensions } from 'react-native'
 import { router } from 'expo-router'
 import { getCategories, saveUnlockedCategories } from '../lib/api'
 import { CATEGORY_EMOJIS } from '../lib/categoryEmojis'
@@ -16,6 +16,9 @@ interface Category {
 
 export default function OnboardingScreen() {
   const { userId } = useAuth()
+  const { width: SW } = useWindowDimensions()
+  const isTablet = SW >= 600
+  const contentWidth = isTablet ? Math.min(SW * 0.72, 600) : undefined
   const [categories, setCategories] = useState<Category[]>([])
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
@@ -60,6 +63,7 @@ export default function OnboardingScreen() {
 
   return (
     <View style={styles.container}>
+      <View style={[styles.inner, isTablet && { width: contentWidth, alignSelf: 'center' }]}>
       <View style={styles.header}>
         <Text style={styles.title}>Pick your topics</Text>
         <Text style={styles.subtitle}>
@@ -67,6 +71,20 @@ export default function OnboardingScreen() {
             ? `Choose ${remaining} more to start`
             : 'Ready to go!'}
         </Text>
+        <View style={styles.diffList}>
+          <View style={styles.diffRow}>
+            <Text style={styles.diffLabel}>🟢 Easy</Text>
+            <Text style={styles.diffDesc}>One path connects Start to End. The other bubbles are red herrings — can you find THE bridge?</Text>
+          </View>
+          <View style={styles.diffRow}>
+            <Text style={styles.diffLabel}>🟡 Medium</Text>
+            <Text style={styles.diffDesc}>Only one route completes the connection. Can you navigate through the dead ends?</Text>
+          </View>
+          <View style={styles.diffRow}>
+            <Text style={styles.diffLabel}>🔴 Hard</Text>
+            <Text style={styles.diffDesc}>Multiple paths work — but only one is shortest. Can you find the optimal route?</Text>
+          </View>
+        </View>
       </View>
 
       <ScrollView
@@ -111,16 +129,22 @@ export default function OnboardingScreen() {
           }
         </Pressable>
       </View>
+      </View>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
+  inner: { flex: 1 },
   center: { flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' },
   header: { paddingTop: 80, paddingHorizontal: 24, paddingBottom: 24 },
   title: { fontSize: 32, fontWeight: '800', color: colors.textPrimary, letterSpacing: -0.5 },
   subtitle: { fontSize: 16, color: colors.textSecondary, marginTop: 6, fontWeight: '500' },
+  diffList: { marginTop: 16, gap: 8 },
+  diffRow: { gap: 2 },
+  diffLabel: { fontSize: 13, fontWeight: '700', color: colors.textPrimary },
+  diffDesc: { fontSize: 12, color: colors.textSecondary, lineHeight: 18 },
   scroll: { flex: 1 },
   grid: {
     flexDirection: 'row',
