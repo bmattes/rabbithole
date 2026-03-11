@@ -26,7 +26,7 @@ dotenv.config()
 
 import * as fs from 'fs'
 import * as path from 'path'
-import Anthropic from '@anthropic-ai/sdk'
+import OpenAI from 'openai'
 import { fetchEntities } from '../wikidata'
 import { buildGraph, Entity, findShortestPath } from '../graphBuilder'
 import { CategoryDomain } from '../wikidata'
@@ -232,7 +232,7 @@ function applySubqueriesToDomainFile(domainContent: string, newSubqueries: strin
   return trimmed + (needsComma ? ',' : '') + '\n  // --- graph-repair-agent additions ---\n  ' + newSubqueries.split('\n').join('\n  ') + '\n' + after
 }
 
-async function runRepairIteration(client: Anthropic, iteration: number, stats: GraphStats): Promise<string | null> {
+async function runRepairIteration(client: OpenAI, iteration: number, stats: GraphStats): Promise<string | null> {
   const anchorType = ANCHOR_TYPES[domain as string] ?? 'entity'
   const domainContent = readDomainFile()
 
@@ -312,20 +312,16 @@ sq('medium', ['person', 'other'], (limit) => \`
 
 Think carefully about what specific properties will create new multi-hop paths for ${domain} at ${missingStr} difficulty.`
 
-  console.log(`\n  [claude] requesting new subqueries (iteration ${iteration})...`)
+  console.log(`\n  [openai] requesting new subqueries (iteration ${iteration})...`)
 
-  const message = await client.messages.create({
-    model: 'claude-opus-4-6',
+  const response = await client.chat.completions.create({
+    model: 'gpt-4o',
     max_tokens: 2000,
     messages: [{ role: 'user', content: prompt }],
   })
 
-  const responseText = message.content
-    .filter(b => b.type === 'text')
-    .map(b => (b as any).text)
-    .join('\n')
-
-  console.log(`  [claude] response received (${responseText.length} chars)`)
+  const responseText = response.choices[0]?.message?.content ?? ''
+  console.log(`  [openai] response received (${responseText.length} chars)`)
 
   const newSubqueries = extractNewSubqueries(responseText)
   if (!newSubqueries) {
@@ -345,13 +341,13 @@ async function run() {
   console.log(`Target valid pairs (easy): ${TARGET_ANCHOR_PAIRS}`)
   console.log('='.repeat(60))
 
-  const apiKey = process.env.ANTHROPIC_API_KEY
+  const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) {
-    console.error('ANTHROPIC_API_KEY not set')
+    console.error('OPENAI_API_KEY not set')
     process.exit(1)
   }
 
-  const client = new Anthropic({ apiKey })
+  const client = new OpenAI({ apiKey })
 
   for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
     console.log(`\n--- Iteration ${iteration}/${MAX_ITERATIONS} ---`)
