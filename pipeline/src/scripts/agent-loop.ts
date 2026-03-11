@@ -282,8 +282,10 @@ async function run() {
           console.log(repairOutput.split('\n').map(l => '  ' + l).join('\n'))
           if (repairOutput.includes('REPAIR_SUCCESS')) {
             console.log('  Graph repaired — resetting config and retrying composition...')
-            // Reset overrides so we start fresh with the enriched graph
-            currentOverrides = {}
+            // Reset config but preserve minAnchorFamiliarity=0 if it was already zeroed
+            // (non-person anchor domains like food/art/literature need this permanently)
+            const preservedFamiliarity = currentOverrides.minAnchorFamiliarity === 0 ? { minAnchorFamiliarity: 0 } : {}
+            currentOverrides = preservedFamiliarity
             updateDomainConfig(currentOverrides)
             nextForceRefresh = true
             stuckCount = 0
@@ -297,7 +299,8 @@ async function run() {
           const repairOutput = (e.stdout ?? '') + (e.stderr ?? '')
           console.log(repairOutput.split('\n').map((l: string) => '  ' + l).join('\n'))
           if (repairOutput.includes('REPAIR_SUCCESS')) {
-            currentOverrides = {}
+            const preservedFamiliarity = currentOverrides.minAnchorFamiliarity === 0 ? { minAnchorFamiliarity: 0 } : {}
+            currentOverrides = preservedFamiliarity
             updateDomainConfig(currentOverrides)
             nextForceRefresh = true
             stuckCount = 0
