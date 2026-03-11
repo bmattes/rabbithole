@@ -1,8 +1,10 @@
 import { useRef, useState } from 'react'
-import { View, Text, Pressable, StyleSheet, ScrollView, useWindowDimensions } from 'react-native'
+import { View, Text, Pressable, StyleSheet, ScrollView, Dimensions } from 'react-native'
 import Svg, { Path } from 'react-native-svg'
 import { router } from 'expo-router'
 import { colors } from '../lib/theme'
+
+const { width: SW } = Dimensions.get('window')
 
 const STEPS = [
   {
@@ -174,7 +176,7 @@ function DifficultyVisual() {
     { label: '🔴 Hard', desc: 'Multiple paths work — but only one is shortest. Can you find the optimal route?' },
   ]
   return (
-    <View style={{ width: '100%', gap: 12 }}>
+    <View style={dv.container}>
       {rows.map(r => (
         <View key={r.label} style={dv.row}>
           <Text style={dv.label}>{r.label}</Text>
@@ -204,13 +206,9 @@ function StreakVisual() {
   )
 }
 
-const MAX_CONTENT_WIDTH = 540
-
 export default function HowToPlayScreen() {
   const [step, setStep] = useState(0)
   const scrollRef = useRef<ScrollView>(null)
-  const { width: SW } = useWindowDimensions()
-  const isTablet = SW >= 600
 
   function goTo(i: number) {
     setStep(i)
@@ -226,7 +224,6 @@ export default function HowToPlayScreen() {
   }
 
   const isLast = step === STEPS.length - 1
-  const contentWidth = isTablet ? Math.min(SW * 0.72, MAX_CONTENT_WIDTH) : SW
 
   return (
     <View style={styles.container}>
@@ -240,12 +237,10 @@ export default function HowToPlayScreen() {
       >
         {STEPS.map((s, i) => (
           <View key={i} style={[styles.page, { width: SW }]}>
-            <View style={[styles.pageInner, { width: contentWidth }]}>
-              <Text style={[styles.emoji, isTablet && styles.emojiLg]}>{s.emoji}</Text>
-              <Text style={[styles.title, isTablet && styles.titleLg]}>{s.title}</Text>
-              <Text style={[styles.body, isTablet && styles.bodyLg]}>{s.body}</Text>
-              <View style={styles.visualBox}>{s.visual}</View>
-            </View>
+            <Text style={styles.emoji}>{s.emoji}</Text>
+            <Text style={styles.title}>{s.title}</Text>
+            <Text style={styles.body}>{s.body}</Text>
+            <View style={styles.visualBox}>{s.visual}</View>
           </View>
         ))}
       </ScrollView>
@@ -258,7 +253,7 @@ export default function HowToPlayScreen() {
       </View>
 
       {/* Buttons */}
-      <View style={[styles.footer, isTablet && { paddingHorizontal: (SW - contentWidth) / 2 + 24 }]}>
+      <View style={styles.footer}>
         <Pressable style={styles.primaryBtn} onPress={next}>
           <Text style={styles.primaryBtnText}>{isLast ? "Pick my topics →" : "Next →"}</Text>
         </Pressable>
@@ -351,6 +346,7 @@ const v = StyleSheet.create({
 })
 
 const dv = StyleSheet.create({
+  container: { width: '100%', gap: 12 },
   row: {
     backgroundColor: colors.bgCardAlt,
     borderRadius: 12,
@@ -368,30 +364,21 @@ const styles = StyleSheet.create({
   pager: { flex: 1 },
   page: {
     flex: 1,
-    alignItems: 'center',
-    paddingTop: 48,
-  },
-  pageInner: {
-    flex: 1,
-    alignItems: 'center',
     paddingHorizontal: 32,
+    paddingTop: 80,
+    alignItems: 'center',
   },
   emoji: { fontSize: 52, marginBottom: 20 },
-  emojiLg: { fontSize: 72, marginBottom: 24 },
   title: { color: colors.textPrimary, fontSize: 26, fontWeight: '800', textAlign: 'center', marginBottom: 14, letterSpacing: -0.3 },
-  titleLg: { fontSize: 34 },
   body: { color: colors.textSecondary, fontSize: 16, lineHeight: 24, textAlign: 'center', marginBottom: 32 },
-  bodyLg: { fontSize: 18, lineHeight: 28 },
   visualBox: {
     width: '100%',
-    flex: 1,
     backgroundColor: colors.bgCard,
     borderRadius: 20,
     borderWidth: 1,
     borderColor: colors.border,
     padding: 24,
     alignItems: 'center',
-    justifyContent: 'center',
   },
   dots: { flexDirection: 'row', gap: 8, marginTop: 24, marginBottom: 16, justifyContent: 'center' },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.border },
