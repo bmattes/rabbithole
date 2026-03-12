@@ -1,0 +1,116 @@
+name: Daily Puzzle Generation
+
+on:
+  schedule:
+    - cron: '0 2 * * *'   # 2am UTC every day
+  workflow_dispatch:        # allow manual trigger for testing
+    inputs:
+      date_override:
+        description: 'Date to generate (YYYY-MM-DD). Defaults to tomorrow.'
+        required: false
+
+jobs:
+  generate:
+    name: Generate (${{ matrix.domain }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        domain:
+          - history
+          - movies
+          - soccer
+          - science
+          - geography
+          - literature
+          - philosophy
+          - royals
+          - military
+          - space
+          - food
+          - comics
+          - tv
+          - videogames
+          - art
+          - basketball
+          - americanfootball
+          - mb_rock
+          - mb_hiphop
+          - mb_country
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get ISO week number (for cache key)
+        id: week
+        run: echo "week=$(date +%Y-W%V)" >> $GITHUB_OUTPUT
+
+      - uses: actions/cache@v4
+        with:
+          path: pipeline/.entity-cache
+          key: entity-cache-${{ steps.week.outputs.week }}-${{ matrix.domain }}
+          restore-keys: entity-cache-
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: pipeline/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: pipeline
+
+      - name: Compute target date
+        id: date
+        run: |
+          if [ -n "${{ github.event.inputs.date_override }}" ]; then
+            echo "date=${{ github.event.inputs.date_override }}" >> $GITHUB_OUTPUT
+          else
+            echo "date=$(date -d '+1 day' +%Y-%m-%d)" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Generate puzzles
+        run: npx ts-node src/scripts/agent-loop.ts --domain ${{ matrix.domain }} --date ${{ steps.date.outputs.date }}
+        working-directory: pipeline
+
+  check:
+    name: Verify coverage
+    runs-on: ubuntu-latest
+    needs: generate
+    if: always()   # run even if some matrix jobs failed
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: pipeline/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: pipeline
+
+      - name: Compute target date
+        id: date
+        run: |
+          if [ -n "${{ github.event.inputs.date_override }}" ]; then
+            echo "date=${{ github.event.inputs.date_override }}" >> $GITHUB_OUTPUT
+          else
+            echo "date=$(date -d '+1 day' +%Y-%m-%d)" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check coverage
+        run: node check-today.js ${{ steps.date.outputs.date }}
+        working-directory: pipeline
