@@ -1,0 +1,97 @@
+name: Bulk Puzzle Generation
+
+on:
+  workflow_dispatch:
+    inputs:
+      start_date:
+        description: 'First date to generate (YYYY-MM-DD)'
+        required: true
+      num_days:
+        description: 'Number of consecutive days to generate'
+        required: false
+        default: '30'
+
+jobs:
+  bulk-generate:
+    name: Bulk generate ${{ github.event.inputs.num_days }} days from ${{ github.event.inputs.start_date }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 360   # 6 hour max (GitHub Actions limit)
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get ISO week number (for cache key)
+        id: week
+        run: echo "week=$(date +%Y-W%V)" >> $GITHUB_OUTPUT
+
+      - uses: actions/cache@v4
+        with:
+          path: pipeline/.entity-cache
+          key: entity-cache-${{ steps.week.outputs.week }}
+          restore-keys: entity-cache-
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: pipeline/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: pipeline
+
+      - name: Generate puzzles for all dates
+        working-directory: pipeline
+        run: |
+          START="${{ github.event.inputs.start_date }}"
+          NUM_DAYS="${{ github.event.inputs.num_days }}"
+          DOMAINS="history movies soccer science geography literature philosophy royals military space food comics tv videogames art basketball americanfootball mb_rock mb_hiphop mb_country"
+
+          any_failed=0
+
+          for i in $(seq 0 $((NUM_DAYS - 1))); do
+            DATE=$(date -d "$START + $i days" +%Y-%m-%d)
+            echo ""
+            echo "=============================="
+            echo "Generating date: $DATE ($((i+1))/$NUM_DAYS)"
+            echo "=============================="
+
+            pids=()
+            for domain in $DOMAINS; do
+              npx ts-node src/scripts/agent-loop.ts --domain "$domain" --date "$DATE" &
+              pids+=($!)
+            done
+
+            date_failed=0
+            for pid in "${pids[@]}"; do
+              wait "$pid" || date_failed=1
+            done
+
+            if [ $date_failed -ne 0 ]; then
+              echo "WARNING: One or more domains failed for $DATE"
+              any_failed=1
+            fi
+          done
+
+          exit $any_failed
+
+      - name: Verify coverage for all dates
+        if: always()
+        working-directory: pipeline
+        run: |
+          START="${{ github.event.inputs.start_date }}"
+          NUM_DAYS="${{ github.event.inputs.num_days }}"
+          any_missing=0
+
+          for i in $(seq 0 $((NUM_DAYS - 1))); do
+            DATE=$(date -d "$START + $i days" +%Y-%m-%d)
+            echo "--- $DATE ---"
+            node check-today.js "$DATE" || any_missing=1
+          done
+
+          exit $any_missing
