@@ -74,7 +74,7 @@ jobs:
       - name: Generate all domains for ${{ matrix.date }}
         working-directory: pipeline
         run: |
-          DOMAINS="history movies soccer science geography literature philosophy royals military space food comics tv videogames art basketball americanfootball mb_rock mb_hiphop mb_country"
+          DOMAINS="history movies soccer science geography literature philosophy royals military space food comics tv videogames art basketball americanfootball music mb_rock mb_hiphop mb_country"
           any_failed=0
           for domain in $DOMAINS; do
             echo "--- $domain ---"

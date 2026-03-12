@@ -34,6 +34,7 @@ jobs:
           - art
           - basketball
           - americanfootball
+          - music
           - mb_rock
           - mb_hiphop
           - mb_country
