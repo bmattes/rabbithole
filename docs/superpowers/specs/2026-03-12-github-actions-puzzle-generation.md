@@ -136,7 +136,7 @@ pipeline/
 - **Supabase connection error:** Job fails immediately; workflow fails; notification sent.
 - **Partial success:** `fail-fast: false` (daily) / per-PID `wait` loop (bulk) — all domains attempt generation even if one fails. The check step reports exactly which domains/difficulties are missing.
 - **Re-run after failure:** Re-trigger the daily workflow manually, or use the bulk trigger for the affected date. Already-published puzzles are skipped automatically.
-- **Structural graph failure:** `agent-loop.ts` calls `graph-repair-agent.ts`, which is checked into the repo and available in CI. However, `graph-repair-agent.ts` uses the Claude API to generate new SPARQL subqueries interactively — this requires a `CLAUDE_API_KEY` secret and may not complete reliably unattended. Structural failures are rare and ultimately require a human to review the generated subqueries anyway. If one occurs in CI, the workflow will fail and send a notification — treat it as a manual intervention signal.
+- **Structural graph failure:** `agent-loop.ts` calls `graph-repair-agent.ts`, which is checked into the repo and available in CI. It uses the OpenAI API (already available via `OPENAI_API_KEY`) to generate new SPARQL subqueries, but the output requires human review before merging. Structural failures are rare — if one occurs in CI the workflow will fail and send a notification, treat it as a manual intervention signal.
 
 ---
 
