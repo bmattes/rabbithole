@@ -12,10 +12,36 @@ on:
         default: '30'
 
 jobs:
-  bulk-generate:
-    name: Bulk generate ${{ github.event.inputs.num_days }} days from ${{ github.event.inputs.start_date }}
+  # Step 1: compute the list of dates as a JSON array for the matrix
+  prepare:
     runs-on: ubuntu-latest
-    timeout-minutes: 360   # 6 hour max (GitHub Actions limit)
+    outputs:
+      dates: ${{ steps.gen.outputs.dates }}
+    steps:
+      - name: Generate date list
+        id: gen
+        run: |
+          START="${{ github.event.inputs.start_date }}"
+          NUM_DAYS="${{ github.event.inputs.num_days }}"
+          dates=$(python3 -c "
+          from datetime import date, timedelta
+          import json
+          start = date.fromisoformat('$START')
+          days = int('$NUM_DAYS')
+          print(json.dumps([str(start + timedelta(days=i)) for i in range(days)]))
+          ")
+          echo "dates=$dates" >> $GITHUB_OUTPUT
+
+  # Step 2: one job per date, all running in parallel
+  generate:
+    needs: prepare
+    name: Generate ${{ matrix.date }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        date: ${{ fromJson(needs.prepare.outputs.dates) }}
 
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -32,7 +58,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: pipeline/.entity-cache
-          key: entity-cache-${{ steps.week.outputs.week }}
+          key: entity-cache-${{ steps.week.outputs.week }}-${{ matrix.date }}
           restore-keys: entity-cache-
 
       - uses: actions/setup-node@v4
@@ -45,53 +71,52 @@ jobs:
         run: npm ci
         working-directory: pipeline
 
-      - name: Generate puzzles for all dates
+      - name: Generate all domains for ${{ matrix.date }}
         working-directory: pipeline
         run: |
-          START="${{ github.event.inputs.start_date }}"
-          NUM_DAYS="${{ github.event.inputs.num_days }}"
           DOMAINS="history movies soccer science geography literature philosophy royals military space food comics tv videogames art basketball americanfootball mb_rock mb_hiphop mb_country"
-
           any_failed=0
-
-          for i in $(seq 0 $((NUM_DAYS - 1))); do
-            DATE=$(date -d "$START + $i days" +%Y-%m-%d)
-            echo ""
-            echo "=============================="
-            echo "Generating date: $DATE ($((i+1))/$NUM_DAYS)"
-            echo "=============================="
-
-            pids=()
-            for domain in $DOMAINS; do
-              npx ts-node src/scripts/agent-loop.ts --domain "$domain" --date "$DATE" &
-              pids+=($!)
-            done
-
-            date_failed=0
-            for pid in "${pids[@]}"; do
-              wait "$pid" || date_failed=1
-            done
-
-            if [ $date_failed -ne 0 ]; then
-              echo "WARNING: One or more domains failed for $DATE"
-              any_failed=1
-            fi
+          for domain in $DOMAINS; do
+            echo "--- $domain ---"
+            npx ts-node src/scripts/agent-loop.ts --domain "$domain" --date "${{ matrix.date }}" || any_failed=1
           done
-
           exit $any_failed
 
-      - name: Verify coverage for all dates
+      - name: Verify coverage
         if: always()
+        run: node check-today.js ${{ matrix.date }}
+        working-directory: pipeline
+
+  # Step 3: summary check across all dates
+  check:
+    needs: generate
+    if: always()
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: pipeline/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: pipeline
+
+      - name: Check coverage for all dates
         working-directory: pipeline
         run: |
           START="${{ github.event.inputs.start_date }}"
           NUM_DAYS="${{ github.event.inputs.num_days }}"
           any_missing=0
-
           for i in $(seq 0 $((NUM_DAYS - 1))); do
             DATE=$(date -d "$START + $i days" +%Y-%m-%d)
             echo "--- $DATE ---"
             node check-today.js "$DATE" || any_missing=1
           done
-
           exit $any_missing
