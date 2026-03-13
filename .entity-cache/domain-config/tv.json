@@ -1,0 +1,5 @@
+{
+  "minQualityScore": 10,
+  "minAnchorFamiliarity": 40,
+  "maxHubRatio": 0.5
+}

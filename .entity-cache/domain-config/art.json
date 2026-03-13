@@ -1,0 +1,6 @@
+{
+  "minAnchorFamiliarity": 0,
+  "hubRelatedIdsThreshold": 20,
+  "minQualityScore": 20,
+  "maxHubRatio": 0.4
+}

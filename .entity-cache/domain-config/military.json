@@ -1,0 +1,5 @@
+{
+  "minQualityScore": 24,
+  "hubRelatedIdsThreshold": 40,
+  "minAnchorFamiliarity": 0
+}

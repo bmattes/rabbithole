@@ -1,0 +1,40 @@
+<h2>How should we build the web version?</h2>
+<p class="subtitle">Three approaches — trade-offs between speed and code reuse</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Expo Web (React Native Web)</h3>
+      <p>Add <code>web</code> to the existing Expo app's platforms. Most components compile to the browser automatically. PuzzleCanvas needs a mouse/touch shim replacing PanResponder. Haptics becomes a no-op. Deploy via <code>npx expo export --platform web</code> to Cloudflare Pages.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Shares all game logic + hooks</li><li>One codebase</li><li>Puzzle data layer unchanged</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>PuzzleCanvas needs web event rewrite</li><li>RN Web has occasional quirks</li><li>Harder to customise look for web</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Standalone React web app</h3>
+      <p>New <code>web/</code> directory: plain React + Vite. Port just the puzzle mechanic — no RN dependencies. Canvas rendered with HTML/CSS divs + SVG lines. Shares Supabase client and type definitions.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Clean, purpose-built for web</li><li>Full control over look/feel</li><li>No RN Web quirks</li><li>Easy to deploy to Cloudflare Pages</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Some logic duplication</li><li>Separate deploy pipeline</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Static shareable card only</h3>
+      <p>Server-rendered page at <code>deepr.fm/play</code> — today's puzzle displayed as a beautiful card (start, end, category, blurred intermediates). Big "Download on App Store" CTA. No interactive game.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Fastest to build</li><li>Perfect OG/Twitter card</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>No "hook" — can't feel the mechanic</li><li>Less viral (no score to share)</li></ul></div>
+      </div>
+    </div>
+  </div>
+</div>

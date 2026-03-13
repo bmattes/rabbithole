@@ -1,0 +1,5 @@
+{
+  "minQualityScore": 10,
+  "maxHubRatio": 0.5,
+  "hubRelatedIdsThreshold": 20
+}

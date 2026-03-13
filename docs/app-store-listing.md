@@ -8,18 +8,18 @@ Six Degrees. Daily.
 
 ## Description
 
-Can you connect **The Godfather** to **Pulp Fiction**? **Einstein** to **Taylor Swift**?
+Can you connect The Godfather to Pulp Fiction? Einstein to Taylor Swift?
 
 Hops is a daily word puzzle where you trace a path between two seemingly unrelated concepts — one hop at a time. Every word in the puzzle belongs to the same theme: Movies, History, Science, Music, and more.
 
 Every day, a new puzzle. A new theme. A new chain of connections to discover.
 
-**HOW IT WORKS**
+HOW IT WORKS
 You're given a Start word and an End word. Between them is a web of connected concepts — all from the same category. Drag through the bubbles to build a path. Land on the right ones and you'll feel the connections click into place.
 
 Easy enough to pick up in seconds. Hard enough to keep you thinking all day.
 
-**FEATURES**
+FEATURES
 · Daily puzzles across 20+ categories — Movies, History, Science, Music, Sports, and more
 · Every puzzle stays within its theme — no random jumps across topics
 · Three difficulty levels: Easy, Medium, and Hard

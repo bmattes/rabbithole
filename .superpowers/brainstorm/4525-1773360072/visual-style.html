@@ -1,0 +1,46 @@
+<h2>Visual style for the web version</h2>
+<p class="subtitle">Should it match the app exactly, or have its own web-native feel?</p>
+
+<div class="cards">
+
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="background: #0a0a0a; padding: 20px; min-height: 280px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;">
+      <div style="color: #7c3aed; font-size: 11px; letter-spacing: 2px; text-transform: uppercase; font-weight: 700;">MOVIES · EASY</div>
+      <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: center;">
+        <div style="background: #1a1a1a; border: 2px solid #7c3aed; border-radius: 20px; padding: 8px 14px; color: #fff; font-size: 13px; font-weight: 600;">The Godfather</div>
+        <div style="color: #555; font-size: 18px;">—</div>
+        <div style="background: #1a1a1a; border: 1px solid #333; border-radius: 20px; padding: 8px 14px; color: #888; font-size: 13px;">?</div>
+        <div style="color: #555; font-size: 18px;">—</div>
+        <div style="background: #1a1a1a; border: 1px solid #333; border-radius: 20px; padding: 8px 14px; color: #888; font-size: 13px;">?</div>
+        <div style="color: #555; font-size: 18px;">—</div>
+        <div style="background: #1a1a1a; border: 2px solid #7c3aed; border-radius: 20px; padding: 8px 14px; color: #fff; font-size: 13px; font-weight: 600;">Pulp Fiction</div>
+      </div>
+      <div style="color: #555; font-size: 12px; margin-top: 8px;">Drag to connect • dark mode</div>
+    </div>
+    <div class="card-body">
+      <h3>Match the app — dark + purple</h3>
+      <p>Same dark background (#0a0a0a), purple accent (#7c3aed), pill-shaped bubbles. Familiar to anyone who's seen the app. Strong brand consistency.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image" style="background: #f9f9f7; padding: 20px; min-height: 280px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;">
+      <div style="color: #7c3aed; font-size: 11px; letter-spacing: 2px; text-transform: uppercase; font-weight: 700;">MOVIES · EASY</div>
+      <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: center;">
+        <div style="background: #fff; border: 2px solid #7c3aed; border-radius: 20px; padding: 8px 14px; color: #1a1a1a; font-size: 13px; font-weight: 600; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">The Godfather</div>
+        <div style="color: #ccc; font-size: 18px;">—</div>
+        <div style="background: #f3f3f1; border: 1px solid #e5e5e5; border-radius: 20px; padding: 8px 14px; color: #aaa; font-size: 13px; box-shadow: 0 1px 4px rgba(0,0,0,0.05);">?</div>
+        <div style="color: #ccc; font-size: 18px;">—</div>
+        <div style="background: #f3f3f1; border: 1px solid #e5e5e5; border-radius: 20px; padding: 8px 14px; color: #aaa; font-size: 13px; box-shadow: 0 1px 4px rgba(0,0,0,0.05);">?</div>
+        <div style="color: #ccc; font-size: 18px;">—</div>
+        <div style="background: #fff; border: 2px solid #7c3aed; border-radius: 20px; padding: 8px 14px; color: #1a1a1a; font-size: 13px; font-weight: 600; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">Pulp Fiction</div>
+      </div>
+      <div style="color: #aaa; font-size: 12px; margin-top: 8px;">Drag to connect • light mode</div>
+    </div>
+    <div class="card-body">
+      <h3>Light web-native feel</h3>
+      <p>Light background (#f9f9f7), same purple accent. Feels more like a web product — shareable screenshots pop on Twitter, easier to read on desktop in daylight.</p>
+    </div>
+  </div>
+
+</div>

@@ -27,7 +27,7 @@ function RedirectToOnboarding() {
 export default function RootLayout() {
   return (
     <View style={styles.root}>
-      <Stack screenOptions={{ headerShown: false }} initialRouteName="(tabs)">
+      <Stack screenOptions={{ headerShown: false, presentation: 'fullScreenModal' }} initialRouteName="(tabs)">
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="howtoplay" />
         <Stack.Screen name="onboarding" />
