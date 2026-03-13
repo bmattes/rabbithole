@@ -1,1 +1,0 @@
-{"minQualityScore":5,"maxHubRatio":1.0,"hubRelatedIdsThreshold":100} npx ts-node src/scripts/run-domain.ts --domain tennis --date 2026-03-09 --dry-run

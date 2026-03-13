@@ -2,3 +2,8 @@
 node_modules/
 .env
 .env.local
+.entity-cache/
+.serena/
+.superpowers/
+pipeline/category-probe-results.json
+screenshots/
