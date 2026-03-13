@@ -384,8 +384,7 @@ The best story feels like a journey: starts familiar, travels through unexpected
 
 ## Step 3: Select winner and write narrative
 Pick the candidate with the highest story score (among those passing validity).
-Write a 2-3 sentence narrative for the winner in the style of RabbitHole: engaging, enthusiastic but concise, flowing prose (no bullet points).
-CRITICAL: For every hop, explicitly name the relationship that connects the two nodes — not just that they are connected, but HOW. Use specific factual connective tissue: "X is set in Y", "X was directed by Y", "X and Y both starred in Z", "X won the Y award", "X coached Y", etc. Never write vague transitions like "leads to", "connects to", "expands into", or "ventures into". Every connection must be a named, verifiable fact.
+Write a 2-3 sentence narrative for the winner. The narrative MUST name the exact factual relationship for every single hop — not atmosphere, not vibes, not vague transitions. Each connection must be a stated, verifiable fact: "Saw is a horror film", "horror film connects Apocalypse Now because it is also classified as a horror film", "Apocalypse Now is a war film", "war film connects Dr. Strangelove because it is also a war film". Use constructions like: "X is a [genre]", "X was directed by Y", "X and Y both starred in Z", "X is set in Y", "X won the Y award", "X is published by Y". NEVER write vague filler like "leads to", "connects to", "expands into", "ventures into", "takes us to", or any phrase that doesn't name the actual relationship. No flowery prose. Just the facts, written in clear connected sentences.
 
 Respond with JSON only:
 {
