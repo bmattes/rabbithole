@@ -231,7 +231,7 @@ export default function ResultsScreen() {
     }).join('')
 
     const lines = [
-      `RabbitHole 🐇`,
+      `Hops 🐇`,
       `${diffEmoji} ${hopsNum} hop${hopsNum !== 1 ? 's' : ''} (optimal: ${optimalHopsNum})`,
       hopDots,
       `${playerLabels[0]} → ${playerLabels[playerLabels.length - 1]}`,
@@ -239,7 +239,7 @@ export default function ResultsScreen() {
     if (pathStats && pathStats.totalPlayers >= 2) {
       lines.push(`${pathStats.optimalPathPct}% of players found optimal`)
     }
-    lines.push(`\nrabbitholeapp.com`)
+    lines.push(`\ndeepr.fm/play`)
 
     await Share.share({ message: lines.join('\n') })
   }

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { View, Text, Pressable, StyleSheet, ActivityIndicator, ScrollView } from 'react-native'
 import { router, useFocusEffect } from 'expo-router'
 import { useAuth } from '../../hooks/useAuth'
@@ -148,6 +148,15 @@ export default function TodayScreen() {
   const progression = useProgression(userId)
   const [allCategories, setAllCategories] = useState<Category[]>([])
   const [categoriesLoading, setCategoriesLoading] = useState(true)
+  const [selectedDifficulty, setSelectedDifficulty] = useState<'easy' | 'medium' | 'hard'>('easy')
+
+  // Keep selectedDifficulty valid when unlocks change
+  useEffect(() => {
+    const unlocked = progression.unlockedDifficulties
+    if (!unlocked.includes(selectedDifficulty)) {
+      setSelectedDifficulty(unlocked[unlocked.length - 1] ?? 'easy')
+    }
+  }, [progression.unlockedDifficulties])
 
   const categories = useMemo(() => {
     const unlocked = progression.unlockedCategories
@@ -155,22 +164,28 @@ export default function TodayScreen() {
     return allCategories.filter(c => unlocked.includes(c.id)).slice(0, slots)
   }, [allCategories, progression.unlockedCategories, progression.categorySlots])
 
-  const difficulty = progression.unlockedDifficulties[progression.unlockedDifficulties.length - 1] ?? 'easy'
-
-  const loadCategories = useCallback(() => {
+  const loadCategories = useCallback((showSpinner = true) => {
     if (loading || progression.loading) return
     if (!userId) { setCategoriesLoading(false); return }
-    setCategoriesLoading(true)
-    getCategories(userId, difficulty as 'easy' | 'medium' | 'hard').then(data => {
+    if (showSpinner) setCategoriesLoading(true)
+    getCategories(userId, selectedDifficulty).then(data => {
       setAllCategories(data as Category[])
       setCategoriesLoading(false)
     })
-  }, [userId, loading, progression.loading, difficulty])
+  }, [userId, loading, progression.loading, selectedDifficulty])
 
-  useEffect(() => { loadCategories() }, [loadCategories])
+  const isFirstLoad = useRef(true)
+  useEffect(() => {
+    if (isFirstLoad.current) {
+      isFirstLoad.current = false
+      loadCategories(true)
+    } else {
+      loadCategories(false)
+    }
+  }, [loadCategories])
 
   // Re-fetch completion state every time this tab comes into focus
-  useFocusEffect(useCallback(() => { loadCategories() }, [loadCategories]))
+  useFocusEffect(useCallback(() => { loadCategories(false) }, [loadCategories]))
 
   if (loading || categoriesLoading || progression.loading) {
     return (
@@ -182,9 +197,35 @@ export default function TodayScreen() {
 
   const allDone = categories.length > 0 && categories.every(c => c.completed)
 
+  const unlockedDiffs = progression.unlockedDifficulties
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.title}>Today's Puzzles</Text>
+
+      <View style={styles.diffTabs}>
+        {(['easy', 'medium', 'hard'] as const).map(d => {
+          const unlocked = unlockedDiffs.includes(d)
+          const active = selectedDifficulty === d
+          return (
+            <Pressable
+              key={d}
+              disabled={!unlocked}
+              style={[
+                styles.diffTab,
+                active && { backgroundColor: DIFFICULTY_COLORS[d], borderColor: DIFFICULTY_COLORS[d] },
+                !unlocked && styles.diffTabLocked,
+              ]}
+              onPress={() => setSelectedDifficulty(d)}
+            >
+              <Text style={[styles.diffTabText, active && styles.diffTabTextActive, !unlocked && styles.diffTabTextLocked]}>
+                {d.charAt(0).toUpperCase() + d.slice(1)}
+              </Text>
+              {!unlocked && <Text style={styles.diffTabLockIcon}>🔒</Text>}
+            </Pressable>
+          )
+        })}
+      </View>
 
       {categories.map(cat => {
         const done = !!cat.completed
@@ -192,23 +233,13 @@ export default function TodayScreen() {
           <Pressable
             key={cat.id}
             style={[styles.card, done && styles.cardDone]}
-            onPress={() => { if (!done) router.push(`/puzzle/${cat.id}?categoryName=${encodeURIComponent(cat.name)}`) }}
+            onPress={() => { if (!done) router.push(`/puzzle/${cat.id}?categoryName=${encodeURIComponent(cat.name)}&difficulty=${selectedDifficulty}`) }}
           >
             <Text style={styles.cardEmoji}>{CATEGORY_EMOJIS[cat.wikidata_domain] ?? '🐇'}</Text>
             <View style={styles.cardText}>
-              <View style={styles.cardTitleRow}>
-                <Text style={[styles.cardTitle, done && styles.cardTitleDone]}>{cat.name}</Text>
-                {!done && cat.difficulty && progression.unlockedDifficulties.includes(cat.difficulty as any) && (
-                  <View style={[styles.diffBadge, { backgroundColor: DIFFICULTY_COLORS[cat.difficulty] + '22', borderColor: DIFFICULTY_COLORS[cat.difficulty] + '66' }]}>
-                    <Text style={[styles.diffText, { color: DIFFICULTY_COLORS[cat.difficulty] }]}>{cat.difficulty}</Text>
-                  </View>
-                )}
-              </View>
+              <Text style={[styles.cardTitle, done && styles.cardTitleDone]}>{cat.name}</Text>
               <Text style={styles.cardHint}>
-                {done ? 'Completed today' : getCategoryHint(cat.wikidata_domain, cat.difficulty)}
-              </Text>
-              <Text style={styles.diffAvailable}>
-                {progression.unlockedDifficulties.join(' · ')}
+                {done ? 'Completed today' : getCategoryHint(cat.wikidata_domain, selectedDifficulty)}
               </Text>
             </View>
             {done
@@ -260,6 +291,20 @@ const styles = StyleSheet.create({
   diffText: { fontSize: 11, fontWeight: '700', textTransform: 'capitalize' },
   cardHint: { color: colors.textTertiary, fontSize: 12, marginTop: 3 },
   diffAvailable: { color: colors.textTertiary, fontSize: 11, marginTop: 2 },
+  diffTabs: { flexDirection: 'row', gap: 8, marginBottom: 16 },
+  diffTab: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    alignItems: 'center',
+  },
+  diffTabText: { color: colors.textTertiary, fontSize: 13, fontWeight: '700' },
+  diffTabTextActive: { color: '#fff' },
+  diffTabLocked: { opacity: 0.4 },
+  diffTabTextLocked: { color: colors.textTertiary },
+  diffTabLockIcon: { fontSize: 10, marginTop: 2 },
   cardArrow: { color: colors.accent, fontSize: 20, marginLeft: 8 },
   cardCheck: { color: colors.success, fontSize: 20, fontWeight: '700', marginLeft: 8 },
   allDoneCard: {

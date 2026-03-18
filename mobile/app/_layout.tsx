@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { Stack, router } from 'expo-router'
 import { View, StyleSheet } from 'react-native'
 import { useAuth } from '../hooks/useAuth'
@@ -7,6 +7,7 @@ import { useProgression } from '../hooks/useProgression'
 function RedirectToOnboarding() {
   const { userId, loading: authLoading, session, signInAnonymously } = useAuth()
   const progression = useProgression(userId)
+  const hasNavigated = useRef(false)
 
   useEffect(() => {
     if (!authLoading && !session) {
@@ -16,8 +17,13 @@ function RedirectToOnboarding() {
 
   useEffect(() => {
     if (authLoading || progression.loading) return
-    if (userId && progression.unlockedCategories.length === 0) {
-      router.replace('/howtoplay')
+    if (!hasNavigated.current && userId) {
+      hasNavigated.current = true
+      if (progression.unlockedCategories.length === 0) {
+        router.replace('/howtoplay')
+      } else {
+        router.replace('/(tabs)')
+      }
     }
   }, [authLoading, progression.loading, userId, progression.unlockedCategories.length])
 

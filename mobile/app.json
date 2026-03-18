@@ -2,18 +2,18 @@
   "expo": {
     "name": "RabbitHole",
     "slug": "rabbithole",
-    "version": "1.0.0",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "scheme": "rabbithole",
     "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#0a0a0a"
+      "image": "./assets/icon.png",
+      "resizeMode": "cover",
+      "backgroundColor": "#f2f0eb"
     },
     "ios": {
-      "buildNumber": "2",
+      "buildNumber": "6",
       "supportsTablet": true,
       "bundleIdentifier": "com.benmattes.rabbithole",
       "infoPlist": {

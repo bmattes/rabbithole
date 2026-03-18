@@ -1,10 +1,9 @@
-import { useRef, useState } from 'react'
-import { View, Text, Pressable, StyleSheet, ScrollView, Dimensions } from 'react-native'
+import { useState, useRef } from 'react'
+import { View, Text, Pressable, StyleSheet, Dimensions, FlatList, SafeAreaView } from 'react-native'
 import Svg, { Path } from 'react-native-svg'
 import { router } from 'expo-router'
 import { colors } from '../lib/theme'
 
-const { width: SW } = Dimensions.get('window')
 
 const STEPS = [
   {
@@ -122,65 +121,44 @@ function BubbleVisual() {
 }
 
 function HopsVisual() {
-  const optimalNodes = ['Monaco', 'Europe', 'Turkey']
-  const playerNodes = ['Monaco', 'Europe', 'Asia', 'Turkey']
   return (
-    <View style={v.container}>
-      {/* Optimal path */}
-      <View style={v.pathRow}>
-        <View style={v.pathLabelCol}>
-          <Text style={v.pathLabel}>Optimal</Text>
-          <Text style={[v.pathHops, { color: colors.accent }]}>3 hops ✓</Text>
-        </View>
-        <View style={v.pathBubbles}>
-          {optimalNodes.map((n, i) => (
-            <View key={n} style={v.pathStep}>
-              <View style={[v.pathBubble, i === 0 && v.pathBubbleStart, i === optimalNodes.length - 1 && v.pathBubbleEnd, i > 0 && i < optimalNodes.length - 1 && v.pathBubbleOptimal]}>
-                <Text style={[v.pathBubbleText, (i === 0 || i === optimalNodes.length - 1) && v.pathBubbleTextPill]}>{n}</Text>
-              </View>
-              {i < optimalNodes.length - 1 && <Text style={v.pathArrow}>→</Text>}
-            </View>
-          ))}
-        </View>
+    <View style={{ width: '100%', gap: 12 }}>
+      <View style={{ gap: 2 }}>
+        <Text style={hv.label}>Optimal path</Text>
+        <Text style={hv.path}>Monaco → Europe → Turkey</Text>
+        <Text style={[hv.score, { color: colors.accent }]}>3 hops · 1000 pts ✓</Text>
       </View>
-
-      <View style={v.hopsDivider} />
-
-      {/* Player path */}
-      <View style={v.pathRow}>
-        <View style={v.pathLabelCol}>
-          <Text style={v.pathLabel}>You</Text>
-          <Text style={[v.pathHops, { color: '#d97706' }]}>4 hops</Text>
-        </View>
-        <View style={v.pathBubbles}>
-          {playerNodes.map((n, i) => (
-            <View key={n} style={v.pathStep}>
-              <View style={[v.pathBubble, i === 0 && v.pathBubbleStart, i === playerNodes.length - 1 && v.pathBubbleEnd, i > 0 && i < playerNodes.length - 1 && v.pathBubbleIdle]}>
-                <Text style={[v.pathBubbleText, (i === 0 || i === playerNodes.length - 1) && v.pathBubbleTextPill]}>{n}</Text>
-              </View>
-              {i < playerNodes.length - 1 && <Text style={v.pathArrow}>→</Text>}
-            </View>
-          ))}
-        </View>
+      <View style={{ height: 1, backgroundColor: colors.border }} />
+      <View style={{ gap: 2 }}>
+        <Text style={hv.label}>Your path</Text>
+        <Text style={hv.path}>Monaco → Europe → Asia → Turkey</Text>
+        <Text style={[hv.score, { color: '#d97706' }]}>4 hops · 720 pts</Text>
       </View>
-
-      <Text style={v.hopsHint}>Match the optimal path for full score</Text>
     </View>
   )
 }
 
+const hv = StyleSheet.create({
+  label: { fontSize: 11, fontWeight: '700', color: colors.textTertiary, textTransform: 'uppercase', letterSpacing: 0.5 },
+  path: { fontSize: 14, color: colors.textPrimary, fontWeight: '500' },
+  score: { fontSize: 13, fontWeight: '700' },
+})
+
 function DifficultyVisual() {
   const rows = [
-    { label: '🟢 Easy', desc: 'One path connects Start to End. The other bubbles are red herrings — can you find THE bridge?' },
-    { label: '🟡 Medium', desc: 'Only one route completes the connection. Can you navigate through the dead ends?' },
-    { label: '🔴 Hard', desc: 'Multiple paths work — but only one is shortest. Can you find the optimal route?' },
+    { emoji: '🟢', name: 'Easy', desc: 'Extra bubbles connect to nothing.' },
+    { emoji: '🟡', name: 'Medium', desc: 'Extra bubbles are tempting dead ends.' },
+    { emoji: '🔴', name: 'Hard', desc: 'Multiple routes work — find the shortest.' },
   ]
   return (
-    <View style={dv.container}>
+    <View style={{ width: '100%', gap: 8 }}>
       {rows.map(r => (
-        <View key={r.label} style={dv.row}>
-          <Text style={dv.label}>{r.label}</Text>
-          <Text style={dv.desc}>{r.desc}</Text>
+        <View key={r.name} style={dv.row}>
+          <Text style={dv.emoji}>{r.emoji}</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={dv.name}>{r.name}</Text>
+            <Text style={dv.desc}>{r.desc}</Text>
+          </View>
         </View>
       ))}
     </View>
@@ -206,13 +184,15 @@ function StreakVisual() {
   )
 }
 
+const { width: SW, height: SH } = Dimensions.get('window')
+
 export default function HowToPlayScreen() {
   const [step, setStep] = useState(0)
-  const scrollRef = useRef<ScrollView>(null)
+  const listRef = useRef<FlatList>(null)
 
   function goTo(i: number) {
     setStep(i)
-    scrollRef.current?.scrollTo({ x: i * SW, animated: true })
+    listRef.current?.scrollToIndex({ index: i, animated: true })
   }
 
   function next() {
@@ -226,24 +206,25 @@ export default function HowToPlayScreen() {
   const isLast = step === STEPS.length - 1
 
   return (
-    <View style={styles.container}>
-      <ScrollView
-        ref={scrollRef}
+    <SafeAreaView style={styles.container}>
+      <FlatList
+        ref={listRef}
+        data={STEPS}
+        keyExtractor={(_, i) => String(i)}
         horizontal
         pagingEnabled
         scrollEnabled={false}
         showsHorizontalScrollIndicator={false}
-        style={styles.pager}
-      >
-        {STEPS.map((s, i) => (
-          <View key={i} style={[styles.page, { width: SW }]}>
+        getItemLayout={(_, i) => ({ length: SW, offset: SW * i, index: i })}
+        renderItem={({ item: s }) => (
+          <View style={styles.page}>
             <Text style={styles.emoji}>{s.emoji}</Text>
             <Text style={styles.title}>{s.title}</Text>
             <Text style={styles.body}>{s.body}</Text>
             <View style={styles.visualBox}>{s.visual}</View>
           </View>
-        ))}
-      </ScrollView>
+        )}
+      />
 
       {/* Dots */}
       <View style={styles.dots}>
@@ -263,7 +244,7 @@ export default function HowToPlayScreen() {
           </Pressable>
         )}
       </View>
-    </View>
+    </SafeAreaView>
   )
 }
 
@@ -309,17 +290,17 @@ const v = StyleSheet.create({
   hopsDivider: { height: 1, width: '100%', backgroundColor: colors.border, marginVertical: 12 },
   hopsHint: { color: colors.textTertiary, fontSize: 12, textAlign: 'center', marginTop: 8 },
 
-  pathRow: { width: '100%', flexDirection: 'row', alignItems: 'center', gap: 10 },
-  pathLabelCol: { width: 52, alignItems: 'flex-end' },
-  pathLabel: { color: colors.textTertiary, fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.3 },
-  pathHops: { fontSize: 11, fontWeight: '700' },
-  pathBubbles: { flex: 1, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 2 },
+  pathRow: { width: '100%', flexDirection: 'row', alignItems: 'center', gap: 8 },
+  pathLabelCol: { width: 44, alignItems: 'flex-end' },
+  pathLabel: { color: colors.textTertiary, fontSize: 9, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.3 },
+  pathHops: { fontSize: 10, fontWeight: '700' },
+  pathBubbles: { flex: 1, flexDirection: 'row', alignItems: 'center', flexWrap: 'nowrap', gap: 2 },
   pathStep: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  pathArrow: { color: colors.textTertiary, fontSize: 10 },
+  pathArrow: { color: colors.textTertiary, fontSize: 9 },
   pathBubble: {
     borderRadius: 100,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
     borderWidth: 1.5,
     borderColor: colors.border,
     backgroundColor: colors.bgCardAlt,
@@ -328,7 +309,7 @@ const v = StyleSheet.create({
   pathBubbleEnd: { backgroundColor: '#dc2626', borderColor: '#dc2626' },
   pathBubbleOptimal: { borderColor: colors.accent, backgroundColor: colors.accentLight },
   pathBubbleIdle: { borderColor: colors.border, backgroundColor: colors.bgCardAlt },
-  pathBubbleText: { color: colors.textSecondary, fontSize: 11, fontWeight: '600' },
+  pathBubbleText: { color: colors.textSecondary, fontSize: 10, fontWeight: '600' },
   pathBubbleTextPill: { color: '#fff' },
 
   streakRow: { flexDirection: 'row', gap: 8, marginBottom: 14 },
@@ -346,31 +327,32 @@ const v = StyleSheet.create({
 })
 
 const dv = StyleSheet.create({
-  container: { width: '100%', gap: 12 },
   row: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
     backgroundColor: colors.bgCardAlt,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: 12,
-    gap: 4,
+    padding: 10,
   },
-  label: { color: colors.textPrimary, fontSize: 13, fontWeight: '700' },
-  desc: { color: colors.textSecondary, fontSize: 12, lineHeight: 18 },
+  emoji: { fontSize: 20, lineHeight: 24 },
+  name: { color: colors.textPrimary, fontSize: 13, fontWeight: '700', marginBottom: 1 },
+  desc: { color: colors.textSecondary, fontSize: 12, lineHeight: 17 },
 })
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
-  pager: { flex: 1 },
   page: {
-    flex: 1,
+    width: SW,
     paddingHorizontal: 32,
-    paddingTop: 80,
+    paddingTop: 32,
     alignItems: 'center',
   },
-  emoji: { fontSize: 52, marginBottom: 20 },
-  title: { color: colors.textPrimary, fontSize: 26, fontWeight: '800', textAlign: 'center', marginBottom: 14, letterSpacing: -0.3 },
-  body: { color: colors.textSecondary, fontSize: 16, lineHeight: 24, textAlign: 'center', marginBottom: 32 },
+  emoji: { fontSize: 48, marginBottom: 14 },
+  title: { color: colors.textPrimary, fontSize: 24, fontWeight: '800', textAlign: 'center', marginBottom: 10, letterSpacing: -0.3 },
+  body: { color: colors.textSecondary, fontSize: 15, lineHeight: 22, textAlign: 'center', marginBottom: 12 },
   visualBox: {
     width: '100%',
     backgroundColor: colors.bgCard,
@@ -383,7 +365,7 @@ const styles = StyleSheet.create({
   dots: { flexDirection: 'row', gap: 8, marginTop: 24, marginBottom: 16, justifyContent: 'center' },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.border },
   dotActive: { width: 24, backgroundColor: colors.accent },
-  footer: { paddingHorizontal: 24, paddingBottom: 48, width: '100%', gap: 4 },
+  footer: { paddingHorizontal: 24, paddingBottom: 16, width: '100%', gap: 4 },
   primaryBtn: {
     backgroundColor: colors.accent,
     borderRadius: 14,

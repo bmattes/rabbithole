@@ -384,7 +384,22 @@ The best story feels like a journey: starts familiar, travels through unexpected
 
 ## Step 3: Select winner and write narrative
 Pick the candidate with the highest story score (among those passing validity).
-Write a 2-3 sentence narrative for the winner. The narrative MUST name the exact factual relationship for every single hop — not atmosphere, not vibes, not vague transitions. Each connection must be a stated, verifiable fact: "Saw is a horror film", "horror film connects Apocalypse Now because it is also classified as a horror film", "Apocalypse Now is a war film", "war film connects Dr. Strangelove because it is also a war film". Use constructions like: "X is a [genre]", "X was directed by Y", "X and Y both starred in Z", "X is set in Y", "X won the Y award", "X is published by Y". NEVER write vague filler like "leads to", "connects to", "expands into", "ventures into", "takes us to", or any phrase that doesn't name the actual relationship. No flowery prose. Just the facts, written in clear connected sentences.
+
+Write a 2-3 sentence narrative for the winner. Write like an excited fan who just discovered someone else knows this topic — enthusiastic and warm, but grounded in real facts. The facts come first; the colour is in how you frame them.
+
+The structure is non-negotiable: for EVERY hop, state the explicit factual relationship:
+- "X is classified as a [genre/type]"
+- "X was directed by Y"
+- "X and Y both starred in Z"
+- "X is a member of Y"
+- "X is set in Y" / "X is published by Y" / "X won the Y award"
+
+You can add a brief observation or flourish AFTER stating the fact — e.g. "...and what a pairing that is" or "...which most people forget" — but never instead of it.
+
+BANNED — never open with or substitute facts with: "journey", "venture", "dive into", "leap into", "world of", "realm of", "leads to", "connects to", "Start your", "Begin with", "Explore"
+
+Example — "Saw → Horror film → Apocalypse Now → War film → Dr. Strangelove":
+"Saw is a horror film — and so, surprisingly, is Apocalypse Now, Coppola's Vietnam nightmare that doubles as pure psychological dread. Apocalypse Now also qualifies as a war film, a genre that stretches all the way to Dr. Strangelove, Kubrick's pitch-black comedy about nuclear annihilation."
 
 Respond with JSON only:
 {
@@ -403,7 +418,7 @@ Respond with JSON only:
 }`
 
   const response = await openai.chat.completions.create({
-    model: 'gpt-4o',
+    model: 'gpt-4o-mini',
     max_tokens: 1500,
     messages: [{ role: 'user', content: prompt }],
   })

@@ -45,8 +45,7 @@ export async function getTodaysPuzzle(
     .eq('category_id', categoryId)
     .eq('difficulty', difficulty)
     .eq('status', 'published')
-    .order('date', { ascending: false })
-    .limit(1)
+    .eq('date', localDateString())
     .single()
 
   if (error) return null
@@ -138,8 +137,7 @@ export async function getLeaderboardForCategory(categoryId: string, difficulty: 
     .eq('category_id', categoryId)
     .eq('status', 'published')
     .eq('difficulty', difficulty)
-    .order('date', { ascending: false })
-    .limit(1)
+    .eq('date', localDateString())
     .single()
 
   if (!puzzle) return []
@@ -171,8 +169,7 @@ export async function getCategories(userId?: string | null, difficulty: 'easy' |
         .eq('category_id', cat.id)
         .eq('status', 'published')
         .eq('difficulty', difficulty)
-        .order('date', { ascending: false })
-        .limit(1)
+        .eq('date', localDateString())
         .single()
 
       let completed = false
@@ -187,8 +184,7 @@ export async function getCategories(userId?: string | null, difficulty: 'easy' |
             .select('id')
             .eq('category_id', cat.id)
             .eq('status', 'published')
-            .order('date', { ascending: false })
-            .limit(3)
+            .eq('date', localDateString())
             .then(r => (r.data ?? []).map((p: { id: string }) => p.id))
           )
           .limit(1)

@@ -61,7 +61,7 @@ export function useProgression(userId: string | null): ProgressionState {
     xpForNextLevel,
     streak,
     unlockedCategories,
-    unlockedDifficulties: getUnlockedDifficulties(level),
+    unlockedDifficulties: __DEV__ ? ['easy'] : getUnlockedDifficulties(level),
     categorySlots: getCategorySlotCount(level),
     isSubscriber,
     loading,

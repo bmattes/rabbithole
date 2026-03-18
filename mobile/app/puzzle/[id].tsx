@@ -79,12 +79,12 @@ function buildFakePaths(
 }
 
 export default function PuzzleScreen() {
-  const { id: categoryId, categoryName } = useLocalSearchParams<{ id: string; categoryName?: string }>()
+  const { id: categoryId, categoryName, difficulty: diffParam } = useLocalSearchParams<{ id: string; categoryName?: string; difficulty?: string }>()
   const { elapsed, start, stop } = useTimer()
   const { userId } = useAuth()
   const progression = useProgression(userId)
   const unlockedDifficulties = progression.unlockedDifficulties
-  const difficulty = (unlockedDifficulties[unlockedDifficulties.length - 1] ?? 'easy') as 'easy' | 'medium' | 'hard'
+  const difficulty = ((diffParam ?? unlockedDifficulties[unlockedDifficulties.length - 1] ?? 'easy')) as 'easy' | 'medium' | 'hard'
   const { puzzle: livePuzzle, loading, alreadyCompleted } = usePuzzle(categoryId, userId, difficulty)
   const [started, setStarted] = useState(false)
   const [currentHops, setCurrentHops] = useState(0)
