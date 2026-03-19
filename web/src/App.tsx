@@ -8,7 +8,7 @@ type AppState = 'loading' | 'playing' | 'results' | 'error'
 
 const APP_STORE_URL = 'https://apps.apple.com/ca/app/hops-daily-word-puzzle/id6760190245'
 
-const isTwitterBrowser = /Twitter/i.test(navigator.userAgent)
+const isTwitterBrowser = /TwitteriPhone|TwitterAndroid|Twitter\/|com\.twitter|com\.atebits/i.test(navigator.userAgent)
 
 function TwitterTeaser({ puzzle }: { puzzle: Puzzle | null }) {
   const cream = '#f2f0eb'
