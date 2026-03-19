@@ -8,6 +8,47 @@ type AppState = 'loading' | 'playing' | 'results' | 'error'
 
 const APP_STORE_URL = 'https://apps.apple.com/ca/app/hops-daily-word-puzzle/id6760190245'
 
+const isTwitterBrowser = /Twitter/i.test(navigator.userAgent)
+
+function TwitterTeaser({ puzzle }: { puzzle: Puzzle | null }) {
+  const cream = '#f2f0eb'
+  const brown = '#3d2c1e'
+  const accent = '#c8894a'
+  const muted = '#8a7060'
+  return (
+    <div style={{ minHeight: '100vh', background: cream, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '32px 24px', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
+      <div style={{ fontSize: 48, marginBottom: 8 }}>🐇</div>
+      <div style={{ fontSize: 28, fontWeight: 800, color: brown, letterSpacing: 4, marginBottom: 4 }}>HOPS</div>
+      <div style={{ fontSize: 13, color: muted, marginBottom: 32, letterSpacing: 1 }}>DAILY WORD PUZZLE</div>
+
+      {puzzle ? (
+        <div style={{ width: '100%', maxWidth: 320, background: '#fff', borderRadius: 20, padding: '24px 20px', boxShadow: '0 2px 16px rgba(61,44,30,0.08)', textAlign: 'center', marginBottom: 28 }}>
+          <div style={{ fontSize: 12, color: muted, letterSpacing: 1, marginBottom: 12 }}>TODAY'S PUZZLE{puzzle.category_name ? ` · ${puzzle.category_name.toUpperCase()}` : ''}</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: brown, marginBottom: 6 }}>{puzzle.start_concept}</div>
+          <div style={{ fontSize: 24, color: accent, fontWeight: 300, marginBottom: 6 }}>↓</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: brown, marginBottom: 16 }}>{puzzle.end_concept}</div>
+          <div style={{ fontSize: 13, color: muted }}>Can you find the shortest path?</div>
+        </div>
+      ) : (
+        <div style={{ marginBottom: 28, color: muted, fontSize: 14 }}>Loading today's puzzle…</div>
+      )}
+
+      <a
+        href="https://hops-web.pages.dev/"
+        style={{ display: 'block', width: '100%', maxWidth: 320, background: accent, color: '#fff', padding: '16px 0', borderRadius: 14, fontWeight: 700, fontSize: 16, textDecoration: 'none', textAlign: 'center', marginBottom: 12 }}
+      >
+        Play in Browser
+      </a>
+      <a
+        href={APP_STORE_URL}
+        style={{ display: 'block', width: '100%', maxWidth: 320, background: brown, color: '#fff', padding: '16px 0', borderRadius: 14, fontWeight: 700, fontSize: 16, textDecoration: 'none', textAlign: 'center' }}
+      >
+        Download on iOS — Free
+      </a>
+    </div>
+  )
+}
+
 export default function App() {
   const [appState, setAppState] = useState<AppState>('loading')
   const [puzzle, setPuzzle] = useState<Puzzle | null>(null)
@@ -46,6 +87,8 @@ export default function App() {
     puzzle?.bubbles.find(
       (b) => b.label.toLowerCase() === puzzle.end_concept.toLowerCase()
     )?.id ?? puzzle?.bubbles[puzzle.bubbles.length - 1]?.id ?? ''
+
+  if (isTwitterBrowser) return <TwitterTeaser puzzle={puzzle} />
 
   return (
     <div
