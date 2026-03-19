@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { getProgression } from '../lib/api'
 import {
   levelFromXP,
@@ -8,6 +9,8 @@ import {
   getCategorySlotCount,
   type Difficulty,
 } from '../lib/progression'
+
+const PROGRESSION_CACHE_KEY = 'rh_progression_cache'
 
 export interface ProgressionState {
   totalXP: number
@@ -31,6 +34,23 @@ export function useProgression(userId: string | null): ProgressionState {
   const [isSubscriber, setIsSubscriber] = useState(false)
   const [loading, setLoading] = useState(userId !== null)
 
+  // Load cached progression instantly on mount, then fetch from Supabase
+  useEffect(() => {
+    if (!userId) return
+    AsyncStorage.getItem(PROGRESSION_CACHE_KEY).then(raw => {
+      if (!raw) return
+      try {
+        const cached = JSON.parse(raw)
+        if (cached.userId === userId) {
+          setTotalXP(cached.totalXP ?? 0)
+          setStreak(cached.streak ?? 0)
+          setUnlockedCategories(cached.unlockedCategories ?? [])
+          setIsSubscriber(cached.isSubscriber ?? false)
+        }
+      } catch {}
+    })
+  }, [userId])
+
   const load = useCallback(async () => {
     if (!userId) {
       setLoading(false)
@@ -43,6 +63,14 @@ export function useProgression(userId: string | null): ProgressionState {
       setStreak(data.streak)
       setUnlockedCategories(data.unlockedCategories)
       setIsSubscriber(data.isSubscriber)
+      // Persist to cache for instant load on next relaunch
+      AsyncStorage.setItem(PROGRESSION_CACHE_KEY, JSON.stringify({
+        userId,
+        totalXP: data.totalXP,
+        streak: data.streak,
+        unlockedCategories: data.unlockedCategories,
+        isSubscriber: data.isSubscriber,
+      }))
     }
     setLoading(false)
   }, [userId])
