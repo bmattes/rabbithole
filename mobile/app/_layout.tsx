@@ -1,13 +1,21 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Stack, router } from 'expo-router'
 import { View, StyleSheet } from 'react-native'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useAuth } from '../hooks/useAuth'
-import { useProgression } from '../hooks/useProgression'
 
 function RedirectToOnboarding() {
   const { userId, loading: authLoading, session, signInAnonymously } = useAuth()
-  const progression = useProgression(userId)
   const hasNavigated = useRef(false)
+  const [onboardingChecked, setOnboardingChecked] = useState(false)
+  const [hasOnboarded, setHasOnboarded] = useState(false)
+
+  useEffect(() => {
+    AsyncStorage.getItem('hasCompletedOnboarding').then(val => {
+      setHasOnboarded(val === '1')
+      setOnboardingChecked(true)
+    })
+  }, [])
 
   useEffect(() => {
     if (!authLoading && !session) {
@@ -16,16 +24,16 @@ function RedirectToOnboarding() {
   }, [authLoading, session])
 
   useEffect(() => {
-    if (authLoading || progression.loading) return
+    if (authLoading || !onboardingChecked) return
     if (!hasNavigated.current && userId) {
       hasNavigated.current = true
-      if (progression.unlockedCategories.length === 0) {
-        router.replace('/howtoplay')
-      } else {
+      if (hasOnboarded) {
         router.replace('/(tabs)')
+      } else {
+        router.replace('/howtoplay')
       }
     }
-  }, [authLoading, progression.loading, userId, progression.unlockedCategories.length])
+  }, [authLoading, onboardingChecked, userId, hasOnboarded])
 
   return null
 }

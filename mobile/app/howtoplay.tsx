@@ -2,6 +2,7 @@ import { useState, useRef } from 'react'
 import { View, Text, Pressable, StyleSheet, Dimensions, FlatList, SafeAreaView } from 'react-native'
 import Svg, { Path } from 'react-native-svg'
 import { router } from 'expo-router'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { colors } from '../lib/theme'
 
 
@@ -199,6 +200,7 @@ export default function HowToPlayScreen() {
     if (step < STEPS.length - 1) {
       goTo(step + 1)
     } else {
+      AsyncStorage.setItem('hasCompletedOnboarding', '1')
       router.replace('/onboarding')
     }
   }
